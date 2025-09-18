@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         Torn: Racing enhancements
-// @namespace    lugburz.racing_enhancements
-// @version      0.5.26
+// @name         Torn: Racing enhancements (Compatible with Torn PDA)
+// @namespace    ltcabel.racing_enhancements
+// @version      0.6.0
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
-// @author       Lugburz
+// @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/*
 // @require      https://raw.githubusercontent.com/f2404/torn-userscripts/e3bb87d75b44579cdb6f756435696960e009dc84/lib/lugburz_lib.js
 // @updateURL    https://github.com/f2404/torn-userscripts/raw/master/racing_show_speed.user.js
@@ -15,6 +15,7 @@
 // @grant        GM_notification
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
+// @run-at       document-idle
 // ==/UserScript==
 
 // Whether to show notifications.
@@ -580,23 +581,18 @@ ${currentPoints ? currentPoints : 'N/A'} / Daily gain: ${currentPoints && oldPoi
 'use strict';
 
 // Your code here...
-const href = $(location).attr('href');
-const racingPage = ['sid=racing&tab=log&raceID=', 'page.php?sid=racing'].some(path => href.includes(path));
-
 ajax((page, xhr) => {
-    if (page !== 'loader' && page !== 'page') return;
+    if (page !== "loader" && page !== "page") return;
     $("#racingupdatesnew").ready(addSettingsDiv);
     $("#racingupdatesnew").ready(showSpeed);
     $('#racingAdditionalContainer').ready(showPenalty);
-
-    if (racingPage) {
+    if ($(location).attr('href').includes('sid=racing&tab=log&raceID=') ||
+        $(location).attr('href').includes('page.php?sid=racing')) {
         $('#racingupdatesnew').ready(addPlaybackButton);
     }
     try {
         parseRacingData(JSON.parse(xhr.responseText));
-    } catch (e) {
-        console.error('failed to parse racing data', xhr.responseText);
-    }
+    } catch (e) { console.debug('Could not parse racing data'); }
 
     const JltColor = '#fff200';
     if ($('#racingAdditionalContainer').size() > 0 && $('#racingAdditionalContainer').find('div.custom-events-wrap').size() > 0) {
@@ -614,11 +610,12 @@ $("#racingupdatesnew").ready(addSettingsDiv);
 $("#racingupdatesnew").ready(showSpeed);
 $('#racingAdditionalContainer').ready(showPenalty);
 
-if (href.includes('index.php')) {
+if ($(location).attr('href').includes('index.php')) {
     $('#mainContainer').ready(displayDailyGains);
 }
 
-if (racingPage) {
+if ($(location).attr('href').includes('sid=racing&tab=log&raceID=') ||
+    $(location).attr('href').includes('page.php?sid=racing')) {
     $('#racingupdatesnew').ready(addPlaybackButton);
 }
 
@@ -638,3 +635,73 @@ if ((FETCH_RS || SHOW_SKINS) && $(location).attr('href').includes('sid=racing'))
         new MutationObserver(updateDriversList).observe(document.getElementById('racingAdditionalContainer'), {childList: true});
     });
 }
+
+function ajax(callback) {
+    $(document).ajaxComplete((event, xhr, settings) => {
+        if (xhr.readyState > 3 && xhr.status == 200) {
+            let url = settings.url;
+            if (url.indexOf("torn.com/") < 0) url = "torn.com" + (url.startsWith("/") ? "" : "/") + url;
+            const page = url.substring(url.indexOf("torn.com/") + "torn.com/".length, url.indexOf(".php"));
+
+            callback(page, xhr, settings);
+        }
+    });
+}
+
+function pad(num, size) {
+    return ('000000000' + num).substr(-size);
+}
+
+function formatTime(date) {
+    return pad(date.getUTCHours(), 2) + ':' + pad(date.getUTCMinutes(), 2) + ':' + pad(date.getUTCSeconds(), 2);
+}
+
+function formatTimeMsec(msec, alwaysShowHours = false) {
+    const hours = Math.floor((msec % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((msec % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((msec % (1000 * 60)) / 1000);
+    const mseconds = Math.floor(msec % 1000);
+
+    return (alwaysShowHours ? pad(hours, 2) + ":" : (hours > 0 ? hours + ":" : '')) + (hours > 0 || minutes > 0 ? pad(minutes, 2) + ":" : '') + pad(seconds, 2) + "." + pad(mseconds, 3);
+}
+
+function formatTimeSecWithLetters(msec) {
+    const hours = Math.floor((msec % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((msec % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((msec % (1000 * 60)) / 1000);
+
+    return (hours > 0 ? hours + "h " : '') + (hours > 0 || minutes > 0 ? minutes + "min " : '') + seconds + "s";
+}
+
+function decode64(input) {
+    var output = '';
+    var chr1, chr2, chr3 = '';
+    var enc1, enc2, enc3, enc4 = '';
+    var i = 0;
+    var keyStr = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+    var base64test = /[^A-Za-z0-9\+\/\=]/g;
+    if (base64test.exec(input)) {
+        console.log('There were invalid base64 characters in the input text.\n' +
+                    'Valid base64 characters are A-Z, a-z, 0-9, \'+\', \'/\',and \'=\'\n' +
+                    'Expect errors in decoding.');
+    }
+    input = input.replace(/[^A-Za-z0-9\+\/\=]/g, '');
+    do {
+        enc1 = keyStr.indexOf(input.charAt(i++));
+        enc2 = keyStr.indexOf(input.charAt(i++));
+        enc3 = keyStr.indexOf(input.charAt(i++));
+        enc4 = keyStr.indexOf(input.charAt(i++));
+        chr1 = (enc1 << 2) | (enc2 >> 4);
+        chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
+        chr3 = ((enc3 & 3) << 6) | enc4;
+        output = output + String.fromCharCode(chr1);
+        if (enc3 != 64) {
+            output = output + String.fromCharCode(chr2);
+        }
+        if (enc4 != 64) {
+            output = output + String.fromCharCode(chr3);
+        }
+        chr1 = chr2 = chr3 = '';
+        enc1 = enc2 = enc3 = enc4 = '';
+    } while (i < input.length);
+    return unescape(output);
