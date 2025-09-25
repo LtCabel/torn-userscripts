@@ -4,7 +4,8 @@
 // @version      0.6.0
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
-// @match        https://www.torn.com/*
+// @match        https://www.torn.com/loader.php?sid=racing*
+// @match        https://www.torn.com/page.php?sid=racing*
 // @updateURL    https://raw.githubusercontent.com/LtCabel/torn-userscripts/master/racing_enhancements_pda_compatible.user.js
 // @downloadURL  https://raw.githubusercontent.com/LtCabel/torn-userscripts/master/racing_enhancements_pda_compatible.user.js
 // @connect      api.torn.com
