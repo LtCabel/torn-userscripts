@@ -428,7 +428,7 @@ function ajax(callback) {
         });
     } catch (e) {
         if (e instanceof ReferenceError) {
-            setTimeout(ajax, 1, callback);
+            setTimeout(ajax, 250, callback);
         } else {
             console.warn('[Racing Enhancements PDA] ajax hook error', e);
         }
