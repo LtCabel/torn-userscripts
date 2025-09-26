@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      0.6.3
+// @version      0.6.4
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -18,33 +18,28 @@
 // @run-at       document-start
 // ==/UserScript==
 
-'use strict';
-console.log('[Racing Enhancements PDA] start');
+console.log("[Racing Enhancements PDA] starting");
 
-// Whether to show notifications.
+// -------------------- Toggles / settings --------------------
 const NOTIFICATIONS = GM_getValue('showNotifChk') != 0;
-// Whether to show race result as soon as a race starts.
 const SHOW_RESULTS = GM_getValue('showResultsChk') != 0;
-// Whether to show current speed.
 const SHOW_SPEED = GM_getValue('showSpeedChk') != 0;
-// whether to show the top3 position icon
 const SHOW_POSITION_ICONS = GM_getValue('showPositionIconChk') != 0;
-// Whether to fetch others' racing skill from the API (requires API key).
-let FETCH_RS = !!(GM_getValue('apiKey') && GM_getValue('apiKey').length > 0);
-// Whether to show car skins
+let   FETCH_RS = !!(GM_getValue('apiKey') && GM_getValue('apiKey').length > 0);
 const SHOW_SKINS = GM_getValue('showSkinsChk') != 0;
 
-// Domain for racecar skins
+// -------------------- Skins config --------------------
 const SKIN_AWARDS = 'https://race-skins.brainslug.nl/custom/data';
-const SKIN_IMAGE = id => `https://race-skins.brainslug.nl/assets/${id}`;
+const SKIN_IMAGE  = id => `https://race-skins.brainslug.nl/assets/${id}`;
 
 const userID = getUserIdFromCookie();
-var RACE_ID = '*';
-var period = 1000;
-var last_compl = -1.0;
-var x = 0;
-var penaltyNotif = 0;
+let   RACE_ID = '*';
+const period = 1000;
+let   last_compl = -1.0;
+let   x = 0;
+let   penaltyNotif = 0;
 
+// -------------------- Helpers --------------------
 function maybeClear() {
     if (x != 0 ) {
         clearInterval(x);
@@ -52,15 +47,12 @@ function maybeClear() {
         x = 0;
     }
 }
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// Shared racing skill
+// -------------------- Racing Skill cache --------------------
 const racingSkillCacheByDriverId = new Map();
-
 let updating = false;
+
 async function updateDriversList() {
     const driversList = document.getElementById('leaderBoard');
     if (updating || driversList === null) return;
@@ -76,11 +68,13 @@ async function updateDriversList() {
     $('#updating').size() < 1 && $('#racingupdatesnew').prepend('<div id="updating" style="color: green; font-size: 12px; line-height: 24px;">Updating drivers\' RS and skins...</div>');
 
     const racingSkills = FETCH_RS ? await getRacingSkillForDrivers(driverIds) : {};
-    const racingSkins = SHOW_SKINS ? await getRacingSkinOwners(driverIds) : {};
+    const racingSkins  = SHOW_SKINS ? await getRacingSkinOwners(driverIds)  : {};
     for (let driver of driversList.querySelectorAll('.driver-item')) {
         const driverId = getDriverId(driver);
+
+        // RS badge
         if (FETCH_RS && !!racingSkills[driverId]) {
-            const skill = racingSkills[driverId];
+            const skill   = racingSkills[driverId];
             const nameDiv = driver.querySelector('.name');
             nameDiv.style.position = 'relative';
             if (!driver.querySelector('.rs-display')) {
@@ -90,12 +84,16 @@ async function updateDriversList() {
             const rsSpan = driver.querySelector('.rs-display');
             if (!!rsSpan) rsSpan.remove();
         }
+
+        // Skin
         if (SHOW_SKINS && !!racingSkins[driverId]) {
-            const carImg = driver.querySelector('.car').querySelector('img');
-            const carId = carImg.getAttribute('src').replace(/[^0-9]*/g, '');
-            if (!!racingSkins[driverId][carId]) {
-                carImg.setAttribute('src', SKIN_IMAGE(racingSkins[driverId][carId]));
-                if (driverId == userID) skinCarSidebar(racingSkins[driverId][carId]);
+            const carImg = driver.querySelector('.car')?.querySelector('img');
+            if (carImg) {
+                const carId = carImg.getAttribute('src').replace(/[^0-9]*/g, '');
+                if (!!racingSkins[driverId][carId]) {
+                    carImg.setAttribute('src', SKIN_IMAGE(racingSkins[driverId][carId]));
+                    if (driverId == userID) skinCarSidebar(racingSkins[driverId][carId]);
+                }
             }
         }
     }
@@ -109,6 +107,7 @@ function watchForDriversListContentChanges(driversList) {
     new MutationObserver(updateDriversList).observe(driversList, {childList: true});
     driversList.dataset.hasWatcher = 'true';
 }
+
 function getDriverIds(driversList) {
     return Array.from(driversList.querySelectorAll('.driver-item')).map(driver => getDriverId(driver));
 }
@@ -118,10 +117,13 @@ function getDriverId(driverUl) {
 
 let racersCount = 0;
 async function getRacingSkillForDrivers(driverIds) {
-    const toFetch = driverIds.filter(driverId => !racingSkillCacheByDriverId.has(driverId));
-    for (const driverId of toFetch) {
+    const driverIdsToFetch = driverIds.filter(driverId => !racingSkillCacheByDriverId.has(driverId));
+
+    for (const driverId of driverIdsToFetch) {
         const json = await fetchRacingSkillForDrivers(driverId);
-        racingSkillCacheByDriverId.set(+driverId, json && json.personalstats && json.personalstats.racingskill ? json.personalstats.racingskill : 'N/A');
+        racingSkillCacheByDriverId.set(+driverId,
+            json && json.personalstats && json.personalstats.racingskill ? json.personalstats.racingskill : 'N/A'
+        );
         if (json && json.error) {
             $('#racingupdatesnew').prepend(`<div style="color: red; font-size: 12px; line-height: 24px;">API error: ${JSON.stringify(json.error)}</div>`);
             break;
@@ -129,12 +131,13 @@ async function getRacingSkillForDrivers(driverIds) {
         racersCount++;
         if (racersCount > 20) await sleep(1500);
     }
-    const hash = {};
+
+    const resultHash = {};
     for (const driverId of driverIds) {
         const skill = racingSkillCacheByDriverId.get(driverId);
-        if (skill) hash[driverId] = skill;
+        if (!!skill) resultHash[driverId] = skill;
     }
-    return hash;
+    return resultHash;
 }
 
 let _skinOwnerCache = null;
@@ -142,13 +145,13 @@ async function getRacingSkinOwners(driverIds) {
     function filterSkins(skins) {
         let result = {};
         for (const driverId of driverIds) {
-            if (skins && skins['*'] && skins['*'][driverId]) result[driverId] = skins['*'][driverId];
-            if (skins && skins[RACE_ID] && skins[RACE_ID][driverId]) result[driverId] = skins[RACE_ID][driverId];
+            if (skins?.['*']?.[driverId]) result[driverId] = skins['*'][driverId];
+            if (skins?.[RACE_ID]?.[driverId]) result[driverId] = skins[RACE_ID][driverId];
         }
         return result;
     }
     return new Promise(resolve => {
-        if (_skinOwnerCache) return resolve(_skinOwnerCache);
+        if (!!_skinOwnerCache) return resolve(_skinOwnerCache);
         GM_xmlhttpRequest({
             method: 'GET',
             url: SKIN_AWARDS,
@@ -173,57 +176,107 @@ function skinCarSidebar(carSkin) {
             tornItem.setAttribute('src', SKIN_IMAGE(carSkin));
             tornItem.setAttribute('srcset', SKIN_IMAGE(carSkin));
             tornItem.style.display = 'block';
-            tornItem.style.opacity = 1;
+            tornItem.style.opacity  = 1;
             const canvas = carSelected.querySelector('canvas');
-            if (canvas) canvas.style.display = 'none';
+            if (!!canvas) canvas.style.display = 'none';
             _skinned = tornItem;
         } catch (err) { console.error(err); }
     }
 }
 
+// -------------------- Utility --------------------
 function getUserIdFromCookie() {
     const userIdString = document.cookie.split(';')
-        .map(e => e.trim())
-        .find(e => e.indexOf('uid=') === 0)
-        .replace('uid=', '');
+        .map(entry => entry.trim())
+        .find(entry => entry.indexOf('uid=') === 0)
+        ?.replace('uid=', '') || '0';
     return parseInt(userIdString, 10);
 }
-
-function formatDate(date) {
-    const month = (+date.getUTCMonth()) + (+1);
-    return date.getUTCFullYear() + '-' + pad(month, 2) + '-' + pad(date.getUTCDate(), 2) + ' ' + formatTime(date);
+function pad(num, size) { return ('000000000' + num).substr(-size); }
+function formatTime(date) {
+    return pad(date.getUTCHours(), 2) + ':' + pad(date.getUTCMinutes(), 2) + ':' + pad(date.getUTCSeconds(), 2);
+}
+function formatTimeMsec(msec, alwaysShowHours = false) {
+    const hours    = Math.floor((msec % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes  = Math.floor((msec % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds  = Math.floor((msec % (1000 * 60)) / 1000);
+    const mseconds = Math.floor(msec % 1000);
+    return (alwaysShowHours ? pad(hours, 2) + ":" : (hours > 0 ? hours + ":" : ''))
+        + (hours > 0 || minutes > 0 ? pad(minutes, 2) + ":" : '')
+        + pad(seconds, 2) + "." + pad(mseconds, 3);
+}
+function formatTimeSecWithLetters(msec) {
+    const hours   = Math.floor((msec % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((msec % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((msec % (1000 * 60)) / 1000);
+    return (hours > 0 ? hours + "h " : '') + (hours > 0 || minutes > 0 ? minutes + "min " : '') + seconds + "s";
+}
+function decode64(input) {
+    var output = '';
+    var chr1, chr2, chr3 = '';
+    var enc1, enc2, enc3, enc4 = '';
+    var i = 0;
+    var keyStr = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+    var base64test = /[^A-Za-z0-9\+\/\=]/g;
+    if (base64test.exec(input)) {
+        console.log('Invalid base64 characters detected. Expect possible decode issues.');
+    }
+    input = input.replace(/[^A-Za-z0-9\+\/\=]/g, '');
+    do {
+        enc1 = keyStr.indexOf(input.charAt(i++));
+        enc2 = keyStr.indexOf(input.charAt(i++));
+        enc3 = keyStr.indexOf(input.charAt(i++));
+        enc4 = keyStr.indexOf(input.charAt(i++));
+        chr1 = (enc1 << 2) | (enc2 >> 4);
+        chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
+        chr3 = ((enc3 & 3) << 6) | enc4;
+        output = output + String.fromCharCode(chr1);
+        if (enc3 != 64) output = output + String.fromCharCode(chr2);
+        if (enc4 != 64) output = output + String.fromCharCode(chr3);
+        chr1 = chr2 = chr3 = '';
+        enc1 = enc2 = enc3 = enc4 = '';
+    } while (i < input.length);
+    return unescape(output);
 }
 
+// -------------------- API --------------------
 function fetchRacingSkillForDrivers(driverIds) {
     const apiKey = GM_getValue('apiKey');
     return new Promise((resolve, reject) => {
         GM_xmlhttpRequest({
             method: 'POST',
             url: `https://api.torn.com/user/${driverIds}?selections=personalstats&comment=RacingUiUx&key=${apiKey}`,
-            headers: {'Content-Type': 'application/json'},
+            headers: { 'Content-Type': 'application/json' },
             onload: (response) => {
                 try { resolve(JSON.parse(response.responseText)); }
-                catch (err) { reject(err); }
+                catch(err) { reject(err); }
             },
-            onerror: (err) => reject(err)
+            onerror: (err) => { reject(err); }
         });
     });
 }
 
+// -------------------- UI bits --------------------
 function showSpeed() {
     if (!SHOW_SPEED || $('#racingdetails').size() < 1 || $('#racingdetails').find('#speed_mph').size() > 0) return;
+
     $('#racingdetails').find('li.pd-name').each(function() {
         if ($(this).text() == 'Name:') $(this).hide();
         if ($(this).text() == 'Position:') $(this).text('Pos:');
         if ($(this).text() == 'Completion:') $(this).text('Compl:');
     });
     $('#racingdetails').append('<li id="speed_mph" class="pd-val"></li>');
+
     maybeClear();
     x = setInterval(function() {
-        if ($('#racingupdatesnew').find('div.track-info').size() < 1) { maybeClear(); return; }
-        let laps = $('#racingupdatesnew').find('div.title-black').text().split(" - ")[1].split(" ")[0];
-        let len = $('#racingupdatesnew').find('div.track-info').attr('data-length').replace('mi', '');
+        if ($('#racingupdatesnew').find('div.track-info').size() < 1) {
+            maybeClear();
+            return;
+        }
+        let laps  = $('#racingupdatesnew').find('div.title-black').text().split(" - ")[1].split(" ")[0];
+        let len   = $('#racingupdatesnew').find('div.track-info').attr('data-length').replace('mi', '');
         let compl = $('#racingdetails').find('li.pd-completion').text().replace('%', '');
+
         if (last_compl >= 0) {
             let speed = (compl - last_compl) / 100 * laps * len * 60 * 60 * 1000 / period;
             $('#speed_mph').text(speed.toFixed(2) + 'mph');
@@ -257,14 +310,14 @@ function checkPenalty() {
 
 function updateSkill(level) {
     const skill = Number(level).toFixed(5);
-    const prev = GM_getValue('racinglevel');
+    const prev  = GM_getValue('racinglevel');
+
     const now = Date.now();
     const lastDaysRs = GM_getValue('lastDaysRs');
     if (lastDaysRs && lastDaysRs.includes(':')) {
         const ts = lastDaysRs.split(':')[0];
-        const dateTs = new Date();
-        dateTs.setTime(ts);
-        if (1 * (new Date(now).setUTCHours(0, 0, 0, 0)) - 1 * (dateTs.setUTCHours(0, 0, 0, 0)) >= 24*60*60*1000) {
+        const dateTs = new Date(); dateTs.setTime(ts);
+        if ((new Date(now).setUTCHours(0,0,0,0)) - (dateTs.setUTCHours(0,0,0,0)) >= 24*60*60*1000) {
             GM_setValue('lastDaysRs', `${now}:${prev ? prev : skill}`);
         }
     } else {
@@ -285,6 +338,7 @@ function updateSkill(level) {
         } else {
             $('#racingMainContainer').find('div.skill').text(skill);
         }
+
         const lastInc = GM_getValue('lastRSincrement');
         if (lastInc) $('div.skill').append(`<div style="margin-top: 10px;">Last gain: ${lastInc}</div>`);
     }
@@ -296,9 +350,8 @@ function updatePoints(pointsearned) {
     const prev = GM_getValue('pointsearned');
     if (lastDaysPoints && lastDaysPoints.includes(':')) {
         const ts = lastDaysPoints.split(':')[0];
-        const dateTs = new Date();
-        dateTs.setTime(ts);
-        if (1 * (new Date(now).setUTCHours(0, 0, 0, 0)) - 1 * (dateTs.setUTCHours(0, 0, 0, 0)) >= 24*60*60*1000) {
+        const dateTs = new Date(); dateTs.setTime(ts);
+        if ((new Date(now).setUTCHours(0,0,0,0)) - (dateTs.setUTCHours(0,0,0,0)) >= 24*60*60*1000) {
             GM_setValue('lastDaysPoints', `${now}:${prev ? prev : pointsearned}`);
         }
     } else {
@@ -307,32 +360,38 @@ function updatePoints(pointsearned) {
     GM_setValue('pointsearned', pointsearned);
 }
 
+// -------------------- Results --------------------
 function parseRacingData(data) {
+    // no sidebar in phone mode
     const my_name = $("#sidebarroot").find("a[class^='menu-value']").html() || data.user.playername;
-    updateSkill(data['user']['racinglevel']);
-    updatePoints(data['user']['pointsearned']);
 
-    const leavepenalty = data['user']['leavepenalty'];
+    updateSkill(data.user.racinglevel);
+    updatePoints(data.user.pointsearned);
+
+    const leavepenalty = data.user.leavepenalty;
     GM_setValue('leavepenalty', leavepenalty);
     checkPenalty();
 
+    // race link
     if ($('#raceLink').size() < 1) {
         RACE_ID = data.raceID;
         const raceLink = `<a id="raceLink" href="https://www.torn.com/loader.php?sid=racing&tab=log&raceID=${RACE_ID}" style="float: right; margin-left: 12px;">Link to the race</a>`;
         $(raceLink).insertAfter('#racingEnhSettings');
     }
 
+    // results when race finished
     if (data.timeData.status >= 3) {
-        const carsData = data.raceData.cars;
-        const carInfo = data.raceData.carInfo;
+        const carsData       = data.raceData.cars;
+        const carInfo        = data.raceData.carInfo;
         const trackIntervals = data.raceData.trackData.intervals.length;
+
         let results = [], crashes = [];
 
         for (const playername in carsData) {
-            const userId = carInfo[playername].userID;
+            const userId    = carInfo[playername].userID;
             const intervals = decode64(carsData[playername]).split(',');
             let raceTime = 0;
-            let bestLap = 9999999999;
+            let bestLap  = 9999999999;
 
             if (intervals.length / trackIntervals == data.laps) {
                 for (let i = 0; i < data.laps; i++) {
@@ -340,7 +399,7 @@ function parseRacingData(data) {
                     for (let j = 0; j < trackIntervals; j++) {
                         lapTime += Number(intervals[i * trackIntervals + j]);
                     }
-                    bestLap = Math.min(bestLap, lapTime);
+                    bestLap  = Math.min(bestLap, lapTime);
                     raceTime += Number(lapTime);
                 }
                 results.push([playername, userId, raceTime, bestLap]);
@@ -359,86 +418,41 @@ function parseRacingData(data) {
     }
 }
 
-// compare by time
 function compare(a, b) {
     if (a[2] > b[2]) return 1;
     if (b[2] > a[2]) return -1;
     return 0;
 }
 
-// ---------- Robust jQuery-dependent wiring (ported from Reshula) ----------
-function jqueryDependantInitializations() {
-    try {
-        $("#racingupdatesnew").ready(addSettingsDiv);
-        $("#racingupdatesnew").ready(showSpeed);
-        $('#racingAdditionalContainer').ready(showPenalty);
+function showResults(results, start = 0) {
+    for (let i = 0; i < results.length; i++) {
+        $('#leaderBoard').children('li').each(function() {
+            const name = $(this).find('li.name').text().trim();
+            if (name == results[i][0]) {
+                const p = i + start + 1;
+                const position = p === 1 ? 'gold' : (p === 2 ? 'silver' : (p === 3 ? 'bronze' : ''));
+                let place;
+                if (p != 11 && (p%10) == 1) place = p + 'st';
+                else if (p != 12 && (p%10) == 2) place = p + 'nd';
+                else if (p != 13 && (p%10) == 3) place = p + 'rd';
+                else place = p + 'th';
 
-        if ($(location).attr('href').includes('index.php')) {
-            $('#mainContainer').ready(displayDailyGains);
-        }
+                const result  = typeof results[i][2] === 'number' ? formatTimeMsec(results[i][2] * 1000) : results[i][2];
+                const bestLap = results[i][3] ? formatTimeMsec(results[i][3] * 1000) : null;
 
-        if ($(location).attr('href').includes('sid=racing&tab=log&raceID=') ||
-            $(location).attr('href').includes('page.php?sid=racing')) {
-            $('#racingupdatesnew').ready(addPlaybackButton);
-        }
-
-        // hide playback button when not showing a race log
-        $('#racingupdatesnew').ready(function() {
-            $('div.racing-main-wrap').find('ul.categories > li > a').on('click', function() {
-                $('#racingupdatesnew').find('div.race-player-container').hide();
-            });
-        });
-
-        if ((FETCH_RS || SHOW_SKINS) && $(location).attr('href').includes('sid=racing')) {
-            $("#racingupdatesnew").ready(function() {
-                updateDriversList();
-                new MutationObserver(updateDriversList).observe(document.getElementById('racingAdditionalContainer'), {childList: true});
-            });
-        }
-
-        // Inject styles here (safe to run multiple times)
-        GM_addStyle(`
-        .rs-display { position: absolute; right: 5px; }
-        ul.driver-item > li.name { overflow: auto; }
-        li.name .race_position { background:url(/images/v2/racing/car_status.svg) 0 0 no-repeat; display:inline-block; width:20px; height:18px; vertical-align:text-bottom; }
-        li.name .race_position.gold { background-position:0 0; }
-        li.name .race_position.silver { background-position:0 -22px; }
-        li.name .race_position.bronze { background-position:0 -44px; }`);
-
-    } catch (e) {
-        // jQuery not defined yet in PDA? Try again shortly.
-        if (e instanceof ReferenceError) {
-            setTimeout(jqueryDependantInitializations, 1000);
-        } else {
-            console.warn('[Racing Enhancements PDA] init error', e);
-        }
-    }
-}
-
-// ---------- PDA-safe ajax hook (with retry) ----------
-function ajax(callback) {
-    try {
-        $(document).ajaxComplete((event, xhr, settings) => {
-            if (xhr.readyState > 3 && xhr.status == 200) {
-                let url = settings.url;
-                if (url.indexOf("torn.com/") < 0) url = "torn.com" + (url.startsWith("/") ? "" : "/") + url;
-                const page = url.substring(
-                    url.indexOf("torn.com/") + "torn.com/".length,
-                    url.indexOf(".php")
+                $(this).find('li.name').html(
+                    $(this).find('li.name').html().replace(
+                        name,
+                        ((SHOW_POSITION_ICONS && position) ? `<i class="race_position ${position}"></i>` : '') +
+                        `${name} ${place} ${result}` + (bestLap ? ` (best: ${bestLap})` : '')
+                    )
                 );
-                callback(page, xhr, settings);
+                return false;
             }
         });
-    } catch (e) {
-        // just keep trying until jquery is defined
-        if (e instanceof ReferenceError) {
-            setTimeout(ajax, 1, callback);
-        }
     }
 }
 
-
-// ---------- Original helpers ----------
 function addSettingsDiv() {
     if ($("#racingupdatesnew").size() > 0 && $('#racingEnhSettings').size() < 1) {
         const div = '<div style="font-size: 12px; line-height: 24px; padding-left: 10px; padding-right: 10px; background: repeating-linear-gradient(90deg,#242424,#242424 2px,#2e2e2e 0,#2e2e2e 4px); border-radius: 5px;">' +
@@ -486,12 +500,11 @@ function addExportButton(results, crashes, my_name, race_id, time_ended) {
             csv += [results.length + i + 1, crashes[i][0], crashes[i][1], crashes[i][2], '', (results[i][0] === my_name ? GM_getValue('racinglevel') : '')].join(',') + '\n';
         }
 
-        const timeE = new Date();
-        timeE.setTime(time_ended * 1000);
+        const timeE = new Date(); timeE.setTime(time_ended * 1000);
         const fileName = `${timeE.getUTCFullYear()}${pad(timeE.getUTCMonth() + 1, 2)}${pad(timeE.getUTCDate(), 2)}-race_${race_id}.csv`;
 
         const myblob = new Blob([csv], {type: 'application/octet-stream'});
-        const myurl = window.URL.createObjectURL(myblob);
+        const myurl  = window.URL.createObjectURL(myblob);
         const exportBtn = `<a id="downloadAsCsv" href="${myurl}" style="float: right; margin-left: 12px;" download="${fileName}">Download results as CSV</a>`;
         $(exportBtn).insertAfter('#racingEnhSettings');
     }
@@ -499,10 +512,13 @@ function addExportButton(results, crashes, my_name, race_id, time_ended) {
 
 function addPlaybackButton() {
     if ($("#racingupdatesnew").size() > 0 && $('div.race-player-container').size() < 1) {
-        $('div.drivers-list > div.cont-black').prepend(`<div class="race-player-container"><button id="play-pause-btn" class="play"></button>
+        $('div.drivers-list > div.cont-black').prepend(
+`<div class="race-player-container">
+<button id="play-pause-btn" class="play"></button>
 <div id="speed-slider"><span id="prev-speed" class="disabled"></span><span id="speed-value">x1</span><span id="next-speed" class="enabled"></span></div>
 <div id="replay-bar-container"><span id="progress-active"></span><span id="progress-inactive"></span></div>
-<div id="race-timer-container"><span id="race-timer">00:00:00</span></div></div>`);
+<div id="race-timer-container"><span id="race-timer">00:00:00</span></div>
+</div>`);
     }
 }
 
@@ -514,7 +530,7 @@ function displayDailyGains() {
             // RS gain
             const desc = $(racingLi).find('span.desc');
             if ($(desc).size() > 0) {
-                const rsText = $(desc).text();
+                const rsText    = $(desc).text();
                 const currentRs = GM_getValue('racinglevel');
                 const lastDaysRs = GM_getValue('lastDaysRs');
                 const oldRs = lastDaysRs && lastDaysRs.includes(':') ? lastDaysRs.split(':')[1] : undefined;
@@ -524,7 +540,7 @@ function displayDailyGains() {
 
             // points gain
             const lastDaysPoints = GM_getValue('lastDaysPoints');
-            const currentPoints = GM_getValue('pointsearned');
+            const currentPoints  = GM_getValue('pointsearned');
             const oldPoints = lastDaysPoints && lastDaysPoints.includes(':') ? lastDaysPoints.split(':')[1] : undefined;
             let pointsTitle = 'Racing points earned: How many points you have earned throughout your career.';
             for (const x of [ {points: 25, class: 'D'}, {points: 100, class: 'C'}, {points: 250, class: 'B'}, {points: 475, class: 'A'} ]) {
@@ -536,22 +552,53 @@ ${currentPoints ? currentPoints : 'N/A'} / Daily gain: ${currentPoints && oldPoi
 </span>
 </li>`;
             $(pointsLi).insertAfter(racingLi);
-
             return false;
         }
     });
 }
 
-// ---- boot: attach ajax hook, parse responses, then run robust init
+// -------------------- PDA-safe ajax hook (with retry) --------------------
+function ajax(callback) {
+    try {
+        $(document).ajaxComplete((event, xhr, settings) => {
+            if (xhr.readyState > 3 && xhr.status == 200) {
+                let url = settings.url;
+                if (url.indexOf("torn.com/") < 0) url = "torn.com" + (url.startsWith("/") ? "" : "/") + url;
+                const page = url.substring(url.indexOf("torn.com/") + "torn.com/".length, url.indexOf(".php"));
+                callback(page, xhr, settings);
+            }
+        });
+    } catch (e) {
+        // keep trying until jQuery is ready in PDA
+        if (e instanceof ReferenceError) {
+            setTimeout(ajax, 250, callback);
+        } else {
+            console.warn('[Racing Enhancements PDA] ajax hook error', e);
+        }
+    }
+}
+
+// -------------------- Main wiring --------------------
+'use strict';
+
 ajax((page, xhr) => {
     if (page != "loader" && page != "page") return;
+
+    $("#racingupdatesnew").ready(addSettingsDiv);
+    $("#racingupdatesnew").ready(showSpeed);
+    $('#racingAdditionalContainer').ready(showPenalty);
+
+    if ($(location).attr('href').includes('sid=racing&tab=log&raceID=')) {
+        $('#racingupdatesnew').ready(addPlaybackButton);
+    }
+
     try {
         parseRacingData(JSON.parse(xhr.responseText));
     } catch (e) {
-        console.debug('Could not parse racing data', e);
+        console.debug('[Racing Enhancements PDA] Could not parse racing data', e);
     }
 
-    // also color JLT events
+    // Highlight JLT custom events
     const JltColor = '#fff200';
     if ($('#racingAdditionalContainer').size() > 0 && $('#racingAdditionalContainer').find('div.custom-events-wrap').size() > 0) {
         $('#racingAdditionalContainer').find('div.custom-events-wrap').find('ul.events-list > li').each((i, li) => {
@@ -565,44 +612,52 @@ ajax((page, xhr) => {
 });
 
 checkPenalty();
-jqueryDependantInitializations();
 
-// ---------- tiny utils ----------
-function pad(num, size) { return ('000000000' + num).substr(-size); }
-function formatTime(date) { return pad(date.getUTCHours(), 2) + ':' + pad(date.getUTCMinutes(), 2) + ':' + pad(date.getUTCSeconds(), 2); }
-function formatTimeMsec(msec, alwaysShowHours = false) {
-    const hours = Math.floor((msec % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((msec % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((msec % (1000 * 60)) / 1000);
-    const mseconds = Math.floor(msec % 1000);
-    return (alwaysShowHours ? pad(hours, 2) + ":" : (hours > 0 ? hours + ":" : '')) + (hours > 0 || minutes > 0 ? pad(minutes, 2) + ":" : '') + pad(seconds, 2) + "." + pad(mseconds, 3);
-}
-function formatTimeSecWithLetters(msec) {
-    const hours = Math.floor((msec % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((msec % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((msec % (1000 * 60)) / 1000);
-    return (hours > 0 ? hours + "h " : '') + (hours > 0 || minutes > 0 ? minutes + "min " : '') + seconds + "s";
-}
-function decode64(input) {
-    var output = '', chr1, chr2, chr3 = '', enc1, enc2, enc3, enc4 = '', i = 0;
-    var keyStr = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-    var base64test = /[^A-Za-z0-9\+\/\=]/g;
-    if (base64test.exec(input)) {
-        console.log('There were invalid base64 characters in the input text.\nValid base64: A-Z, a-z, 0-9, +, /, =');
+// Set up things that depend on jQuery being around in PDA
+jqueryDependantInitializations();
+function jqueryDependantInitializations() {
+    try {
+        $("#racingupdatesnew").ready(addSettingsDiv);
+        $("#racingupdatesnew").ready(showSpeed);
+        $('#racingAdditionalContainer').ready(showPenalty);
+
+        if ($(location).attr('href').includes('index.php')) {
+            $('#mainContainer').ready(displayDailyGains);
+        }
+        if ($(location).attr('href').includes('sid=racing&tab=log&raceID=')) {
+            $('#racingupdatesnew').ready(addPlaybackButton);
+        }
+
+        // Hide playback button when changing race tabs
+        $('#racingupdatesnew').ready(function() {
+            $('div.racing-main-wrap').find('ul.categories > li > a').on('click', function() {
+                $('#racingupdatesnew').find('div.race-player-container').hide();
+            });
+        });
+
+        if ((FETCH_RS || SHOW_SKINS) && $(location).attr('href').includes('sid=racing')) {
+            $("#racingupdatesnew").ready(function() {
+                updateDriversList();
+                new MutationObserver(updateDriversList).observe(document.getElementById('racingAdditionalContainer'), {childList: true});
+            });
+        }
+
+        // Styles
+        GM_addStyle(`
+        .rs-display { position: absolute; right: 5px; }
+        ul.driver-item > li.name { overflow: auto; }
+        li.name .race_position {
+          background:url(/images/v2/racing/car_status.svg) 0 0 no-repeat;
+          display:inline-block; width:20px; height:18px; vertical-align:text-bottom;
+        }
+        li.name .race_position.gold {   background-position:0 0; }
+        li.name .race_position.silver { background-position:0 -22px; }
+        li.name .race_position.bronze { background-position:0 -44px; }
+        `);
+    } catch(e) {
+        // keep trying until jQuery is defined in PDA shell
+        if (e instanceof ReferenceError) {
+            setTimeout(jqueryDependantInitializations, 1000);
+        }
     }
-    input = input.replace(/[^A-Za-z0-9\+\/\=]/g, '');
-    do {
-        enc1 = keyStr.indexOf(input.charAt(i++));
-        enc2 = keyStr.indexOf(input.charAt(i++));
-        enc3 = keyStr.indexOf(input.charAt(i++));
-        enc4 = keyStr.indexOf(input.charAt(i++));
-        chr1 = (enc1 << 2) | (enc2 >> 4);
-        chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
-        chr3 = ((enc3 & 3) << 6) | enc4;
-        output = output + String.fromCharCode(chr1);
-        if (enc3 != 64) output = output + String.fromCharCode(chr2);
-        if (enc4 != 64) output = output + String.fromCharCode(chr3);
-        chr1 = chr2 = chr3 = ''; enc1 = enc2 = enc3 = enc4 = '';
-    } while (i < input.length);
-    return unescape(output);
 }
