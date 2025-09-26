@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      0.6.2
+// @version      0.6.3
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -422,18 +422,21 @@ function ajax(callback) {
             if (xhr.readyState > 3 && xhr.status == 200) {
                 let url = settings.url;
                 if (url.indexOf("torn.com/") < 0) url = "torn.com" + (url.startsWith("/") ? "" : "/") + url;
-                const page = url.substring(url.indexOf("torn.com/") + "torn.com/".length, url.indexOf(".php"));
+                const page = url.substring(
+                    url.indexOf("torn.com/") + "torn.com/".length,
+                    url.indexOf(".php")
+                );
                 callback(page, xhr, settings);
             }
         });
     } catch (e) {
+        // just keep trying until jquery is defined
         if (e instanceof ReferenceError) {
-            setTimeout(ajax, 250, callback);
-        } else {
-            console.warn('[Racing Enhancements PDA] ajax hook error', e);
+            setTimeout(ajax, 1, callback);
         }
     }
 }
+
 
 // ---------- Original helpers ----------
 function addSettingsDiv() {
@@ -541,7 +544,7 @@ ${currentPoints ? currentPoints : 'N/A'} / Daily gain: ${currentPoints && oldPoi
 
 // ---- boot: attach ajax hook, parse responses, then run robust init
 ajax((page, xhr) => {
-    if (page !== "loader" && page !== "page") return;
+    if (page != "loader" && page != "page") return;
     try {
         parseRacingData(JSON.parse(xhr.responseText));
     } catch (e) {
