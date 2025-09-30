@@ -645,7 +645,14 @@ function jqueryDependantInitializations() {
         // Styles
         GM_addStyle(`
         .rs-display { position: absolute; right: 5px; }
-        ul.driver-item > li.name { overflow: auto; }
+        ul.driver-item > li.name {
+          position: relative;
+          height: 18px;                  /* one line tall */
+          white-space: nowrap;           /* keep text on a single line */
+          overflow-x: auto;              /* horizontal scrolling */
+          -webkit-overflow-scrolling: touch; /* smooth scrolling on mobile */
+          padding-right: 24px;           /* space so RS badge doesn't overlap */
+        }
         li.name .race_position {
           background:url(/images/v2/racing/car_status.svg) 0 0 no-repeat;
           display:inline-block; width:20px; height:18px; vertical-align:text-bottom;
