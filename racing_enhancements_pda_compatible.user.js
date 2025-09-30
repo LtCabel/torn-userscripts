@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      0.6.5
+// @version      0.6.6
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -27,7 +27,6 @@ const SHOW_SPEED = GM_getValue('showSpeedChk') != 0;
 const SHOW_POSITION_ICONS = GM_getValue('showPositionIconChk') != 0;
 let   FETCH_RS = !!(GM_getValue('apiKey') && GM_getValue('apiKey').length > 0);
 const SHOW_SKINS = GM_getValue('showSkinsChk') != 0;
-const RACE_ROW_LAYOUT = 'stacked';
 
 // -------------------- Skins config --------------------
 const SKIN_AWARDS = 'https://race-skins.brainslug.nl/custom/data';
@@ -426,49 +425,32 @@ function compare(a, b) {
 }
 
 function showResults(results, start = 0) {
-  for (let i = 0; i < results.length; i++) {
-    $('#leaderBoard').children('li').each(function () {
-      const nameLi = $(this).find('li.name');
-      const nameText = nameLi.clone().children().remove().end().text().trim(); // text without child spans
-      if (nameText === results[i][0]) {
-        const p = i + start + 1;
-        const position = p === 1 ? 'gold' : (p === 2 ? 'silver' : (p === 3 ? 'bronze' : ''));
-        let place;
-        if (p != 11 && (p % 10) == 1) place = p + 'st';
-        else if (p != 12 && (p % 10) == 2) place = p + 'nd';
-        else if (p != 13 && (p % 10) == 3) place = p + 'rd';
-        else place = p + 'th';
+    for (let i = 0; i < results.length; i++) {
+        $('#leaderBoard').children('li').each(function() {
+            const name = $(this).find('li.name').text().trim();
+            if (name == results[i][0]) {
+                const p = i + start + 1;
+                const position = p === 1 ? 'gold' : (p === 2 ? 'silver' : (p === 3 ? 'bronze' : ''));
+                let place;
+                if (p != 11 && (p%10) == 1) place = p + 'st';
+                else if (p != 12 && (p%10) == 2) place = p + 'nd';
+                else if (p != 13 && (p%10) == 3) place = p + 'rd';
+                else place = p + 'th';
 
-        const result = typeof results[i][2] === 'number'
-          ? formatTimeMsec(results[i][2] * 1000)
-          : results[i][2];
-        const bestLap = results[i][3] ? formatTimeMsec(results[i][3] * 1000) : null;
+                const result  = typeof results[i][2] === 'number' ? formatTimeMsec(results[i][2] * 1000) : results[i][2];
+                const bestLap = results[i][3] ? formatTimeMsec(results[i][3] * 1000) : null;
 
-        // keep any existing RS badge that was added elsewhere
-        const rsBadge = nameLi.find('.rs-display').prop('outerHTML') || '';
-
-        const iconHtml = (SHOW_POSITION_ICONS && position)
-          ? `<i class="race_position ${position}"></i>` : '';
-        const titleHtml = `${iconHtml}<span class="race-name">${results[i][0]}</span> <span class="race-place">${place}</span>`;
-
-        // build extras depending on layout
-        let extraHtml = '';
-        if (RACE_ROW_LAYOUT === 'stacked') {
-          extraHtml += `<span class="race-extra result">${result}</span>`;
-          if (bestLap) extraHtml += `<span class="race-extra best">(best: ${bestLap})</span>`;
-        } else { // inline
-          const extraBits = [result];
-          if (bestLap) extraBits.push(`best: ${bestLap}`);
-          extraHtml += `<span class="race-extra">• ${extraBits.join(' • ')}</span>`;
-        }
-
-        // apply layout flag for CSS and rebuild contents
-        nameLi.attr('data-layout', RACE_ROW_LAYOUT).html(titleHtml + extraHtml + rsBadge);
-        nameLi.addClass('racing_name_area');
-        return false; // break .each loop
-      }
-    });
-  }
+                $(this).find('li.name').html(
+                    $(this).find('li.name').html().replace(
+                        name,
+                        ((SHOW_POSITION_ICONS && position) ? `<i class="race_position ${position}"></i>` : '') +
+                        `${name} ${place} ${result}` + (bestLap ? ` (best: ${bestLap})` : '')
+                    )
+                );
+                return false;
+            }
+        });
+    }
 }
 
 function addSettingsDiv() {
@@ -672,32 +654,6 @@ function jqueryDependantInitializations() {
         li.name .race_position.silver { background-position:0 -22px; }
         li.name .race_position.bronze { background-position:0 -44px; }
         `);
-
-        GM_addStyle(`
-        .rs-display {
-        position: absolute;
-        right: 5px;
-        }
-        ul.driver-item > li.name {
-          overflow: auto;
-        }
-        li.name .race_position {
-          background:url(/images/v2/racing/car_status.svg) 0 0 no-repeat;
-          display:inline-block;
-          width:20px;
-          height:18px;
-          vertical-align:text-bottom;
-        }
-        li.name .race_position.gold {
-          background-position:0 0;
-        }
-        li.name .race_position.silver {
-          background-position:0 -22px;
-        }
-        li.name .race_position.bronze {
-          background-position:0 -44px;
-        }`);
-
     } catch(e) {
         // keep trying until jQuery is defined in PDA shell
         if (e instanceof ReferenceError) {
