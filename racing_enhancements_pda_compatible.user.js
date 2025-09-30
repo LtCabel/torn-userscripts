@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      0.6.8
+// @version      0.6.9
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -649,38 +649,44 @@ function jqueryDependantInitializations() {
 
         // Styles
        GM_addStyle(`
-  /* RS badge stays pinned on the right */
-  .rs-display{
-    position:absolute; right:5px; top:0; line-height:18px;
-  }
-
-  /* The name cell itself becomes a scroll container */
+  /* The cell itself: create a local positioning context and reserve room for the RS badge */
   ul.driver-item > li.name{
-    position:relative;
-    display:block;
-    height:18px;                 /* one line tall */
-    overflow-x:auto;             /* horizontal scroll */
-    white-space:nowrap;          /* keep on one line */
-    -webkit-overflow-scrolling:touch;
+    position: relative;
+    overflow: hidden;          /* clip, no wrapping */
+    padding-right: 64px;       /* reserve space so text never sits under RS */
   }
 
-  /* The content inside is wider than the cell -> enables scroll */
+  /* Scroll only the long text we build, not the RS badge */
   ul.driver-item > li.name .name-scroll{
-    display:inline-block;
-    width:max-content;           /* expand to real content width */
-    min-width:100%;              /* at least cell width */
-    padding-right:28px;          /* leave space for RS badge so text doesn't go under it */
+    display: inline-block;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  ul.driver-item > li.name .name-scroll::-webkit-scrollbar{ display:none; }
+
+  /* RS badge is pinned to the right and vertically centered; it does not scroll */
+  ul.driver-item > li.name .rs-display{
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    white-space: nowrap;       /* keep "RS:123" on one line */
+    pointer-events: none;      /* taps drag the scroller underneath instead */
   }
 
-  /* podium icons (unchanged) */
+  /* (unchanged) position icons */
   li.name .race_position{
     background:url(/images/v2/racing/car_status.svg) 0 0 no-repeat;
     display:inline-block; width:20px; height:18px; vertical-align:text-bottom;
   }
-  li.name .race_position.gold   { background-position:0 0; }
-  li.name .race_position.silver { background-position:0 -22px; }
-  li.name .race_position.bronze { background-position:0 -44px; }
+  li.name .race_position.gold{   background-position:0 0; }
+  li.name .race_position.silver{ background-position:0 -22px; }
+  li.name .race_position.bronze{ background-position:0 -44px; }
 `);
+
 
     } catch(e) {
         // keep trying until jQuery is defined in PDA shell
