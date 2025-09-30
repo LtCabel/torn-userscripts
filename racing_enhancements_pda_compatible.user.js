@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      0.6.7
+// @version      0.6.8
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -425,33 +425,38 @@ function compare(a, b) {
 }
 
 function showResults(results, start = 0) {
-    for (let i = 0; i < results.length; i++) {
-        $('#leaderBoard').children('li').each(function() {
-            const name = $(this).find('li.name').text().trim();
-            if (name == results[i][0]) {
-                const p = i + start + 1;
-                const position = p === 1 ? 'gold' : (p === 2 ? 'silver' : (p === 3 ? 'bronze' : ''));
-                let place;
-                if (p != 11 && (p%10) == 1) place = p + 'st';
-                else if (p != 12 && (p%10) == 2) place = p + 'nd';
-                else if (p != 13 && (p%10) == 3) place = p + 'rd';
-                else place = p + 'th';
+  for (let i = 0; i < results.length; i++) {
+    $('#leaderBoard').children('li').each(function () {
+      const nameLi   = $(this).find('li.name');
+      const rawName  = nameLi.text().trim();          // current visible name (no HTML)
+      if (rawName === results[i][0]) {
+        const p = i + start + 1;
+        const position = p === 1 ? 'gold' : (p === 2 ? 'silver' : (p === 3 ? 'bronze' : ''));
+        let place;
+        if (p != 11 && (p % 10) == 1) place = p + 'st';
+        else if (p != 12 && (p % 10) == 2) place = p + 'nd';
+        else if (p != 13 && (p % 10) == 3) place = p + 'rd';
+        else place = p + 'th';
 
-                const result  = typeof results[i][2] === 'number' ? formatTimeMsec(results[i][2] * 1000) : results[i][2];
-                const bestLap = results[i][3] ? formatTimeMsec(results[i][3] * 1000) : null;
+        const result  = typeof results[i][2] === 'number' ? formatTimeMsec(results[i][2] * 1000) : results[i][2];
+        const bestLap = results[i][3] ? formatTimeMsec(results[i][3] * 1000) : null;
 
-                $(this).find('li.name').html(
-                    $(this).find('li.name').html().replace(
-                        name,
-                        ((SHOW_POSITION_ICONS && position) ? `<i class="race_position ${position}"></i>` : '') +
-                        `${name} ${place} ${result}` + (bestLap ? ` (best: ${bestLap})` : '')
-                    )
-                );
-                return false;
-            }
-        });
-    }
+        const iconHtml  = (SHOW_POSITION_ICONS && position) ? `<i class="race_position ${position}"></i>` : '';
+        const titleHtml = `${iconHtml}<span class="race-name">${results[i][0]}</span> <span class="race-place">${place}</span>`;
+        const extraHtml = `<span class="race-extra"> ${result}${bestLap ? ` (best: ${bestLap})` : ''}</span>`;
+
+        // Preserve any existing RS badge (added elsewhere)
+        const rsBadge = nameLi.find('.rs-display').prop('outerHTML') || '';
+
+        // ⬇️ wrap all variable-length text in a scroll container
+        nameLi.html(`<span class="name-scroll">${titleHtml}${extraHtml}</span>${rsBadge}`);
+
+        return false; // break .each loop
+      }
+    });
+  }
 }
+
 
 function addSettingsDiv() {
     if ($("#racingupdatesnew").size() > 0 && $('#racingEnhSettings').size() < 1) {
@@ -643,24 +648,40 @@ function jqueryDependantInitializations() {
         }
 
         // Styles
-        GM_addStyle(`
-        .rs-display { position: absolute; right: 5px; }
-        ul.driver-item > li.name {
-          position: relative;
-          height: 18px;                  /* one line tall */
-          white-space: nowrap;           /* keep text on a single line */
-          overflow-x: auto;              /* horizontal scrolling */
-          -webkit-overflow-scrolling: touch; /* smooth scrolling on mobile */
-          padding-right: 24px;           /* space so RS badge doesn't overlap */
-        }
-        li.name .race_position {
-          background:url(/images/v2/racing/car_status.svg) 0 0 no-repeat;
-          display:inline-block; width:20px; height:18px; vertical-align:text-bottom;
-        }
-        li.name .race_position.gold {   background-position:0 0; }
-        li.name .race_position.silver { background-position:0 -22px; }
-        li.name .race_position.bronze { background-position:0 -44px; }
-        `);
+       GM_addStyle(`
+  /* RS badge stays pinned on the right */
+  .rs-display{
+    position:absolute; right:5px; top:0; line-height:18px;
+  }
+
+  /* The name cell itself becomes a scroll container */
+  ul.driver-item > li.name{
+    position:relative;
+    display:block;
+    height:18px;                 /* one line tall */
+    overflow-x:auto;             /* horizontal scroll */
+    white-space:nowrap;          /* keep on one line */
+    -webkit-overflow-scrolling:touch;
+  }
+
+  /* The content inside is wider than the cell -> enables scroll */
+  ul.driver-item > li.name .name-scroll{
+    display:inline-block;
+    width:max-content;           /* expand to real content width */
+    min-width:100%;              /* at least cell width */
+    padding-right:28px;          /* leave space for RS badge so text doesn't go under it */
+  }
+
+  /* podium icons (unchanged) */
+  li.name .race_position{
+    background:url(/images/v2/racing/car_status.svg) 0 0 no-repeat;
+    display:inline-block; width:20px; height:18px; vertical-align:text-bottom;
+  }
+  li.name .race_position.gold   { background-position:0 0; }
+  li.name .race_position.silver { background-position:0 -22px; }
+  li.name .race_position.bronze { background-position:0 -44px; }
+`);
+
     } catch(e) {
         // keep trying until jQuery is defined in PDA shell
         if (e instanceof ReferenceError) {
