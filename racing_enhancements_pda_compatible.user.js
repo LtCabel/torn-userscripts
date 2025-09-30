@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      0.6.9
+// @version      0.7.0
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -427,35 +427,34 @@ function compare(a, b) {
 function showResults(results, start = 0) {
   for (let i = 0; i < results.length; i++) {
     $('#leaderBoard').children('li').each(function () {
-      const nameLi   = $(this).find('li.name');
-      const rawName  = nameLi.text().trim();          // current visible name (no HTML)
-      if (rawName === results[i][0]) {
+      const nameLi = $(this).find('li.name');
+      const plainName = nameLi.clone().children().remove().end().text().trim();
+      if (plainName === results[i][0]) {
         const p = i + start + 1;
         const position = p === 1 ? 'gold' : (p === 2 ? 'silver' : (p === 3 ? 'bronze' : ''));
-        let place;
-        if (p != 11 && (p % 10) == 1) place = p + 'st';
-        else if (p != 12 && (p % 10) == 2) place = p + 'nd';
-        else if (p != 13 && (p % 10) == 3) place = p + 'rd';
-        else place = p + 'th';
+        const place = (p != 11 && p % 10 == 1) ? p+'st' :
+                      (p != 12 && p % 10 == 2) ? p+'nd' :
+                      (p != 13 && p % 10 == 3) ? p+'rd' : p+'th';
+        const result  = typeof results[i][2] === 'number' ? formatTimeMsec(results[i][2]*1000) : results[i][2];
+        const bestLap = results[i][3] ? ` (best: ${formatTimeMsec(results[i][3]*1000)})` : '';
 
-        const result  = typeof results[i][2] === 'number' ? formatTimeMsec(results[i][2] * 1000) : results[i][2];
-        const bestLap = results[i][3] ? formatTimeMsec(results[i][3] * 1000) : null;
-
-        const iconHtml  = (SHOW_POSITION_ICONS && position) ? `<i class="race_position ${position}"></i>` : '';
-        const titleHtml = `${iconHtml}<span class="race-name">${results[i][0]}</span> <span class="race-place">${place}</span>`;
-        const extraHtml = `<span class="race-extra"> ${result}${bestLap ? ` (best: ${bestLap})` : ''}</span>`;
-
-        // Preserve any existing RS badge (added elsewhere)
+        // keep existing RS badge, but outside the scroll area
         const rsBadge = nameLi.find('.rs-display').prop('outerHTML') || '';
+        nameLi.find('.rs-display').remove();
 
-        // ⬇️ wrap all variable-length text in a scroll container
-        nameLi.html(`<span class="name-scroll">${titleHtml}${extraHtml}</span>${rsBadge}`);
+        const iconHtml = (SHOW_POSITION_ICONS && position) ? `<i class="race_position ${position}"></i>` : '';
+        const textHtml = `${iconHtml}<span class="race-name">${plainName}</span> <span class="race-place">${place}</span> ${result}${bestLap}`;
 
-        return false; // break .each loop
+        nameLi
+          .attr('data-layout', 'stacked')
+          .html(`<span class="name-scroll">${textHtml}</span>${rsBadge}`);
+
+        return false;
       }
     });
   }
 }
+
 
 
 function addSettingsDiv() {
@@ -649,35 +648,36 @@ function jqueryDependantInitializations() {
 
         // Styles
        GM_addStyle(`
-  /* The cell itself: create a local positioning context and reserve room for the RS badge */
+  /* Parent cell creates room for RS and never scrolls */
   ul.driver-item > li.name{
     position: relative;
-    overflow: hidden;          /* clip, no wrapping */
-    padding-right: 64px;       /* reserve space so text never sits under RS */
+    overflow: hidden;
+    padding-right: 64px;      /* space for RS badge */
   }
 
-  /* Scroll only the long text we build, not the RS badge */
+  /* Only this child scrolls horizontally */
   ul.driver-item > li.name .name-scroll{
-    display: inline-block;
-    max-width: 100%;
+    display: block;
+    width: 100%;
     white-space: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    touch-action: pan-x;
   }
   ul.driver-item > li.name .name-scroll::-webkit-scrollbar{ display:none; }
 
-  /* RS badge is pinned to the right and vertically centered; it does not scroll */
+  /* RS badge is pinned and does NOT scroll */
   ul.driver-item > li.name .rs-display{
     position: absolute;
     right: 8px;
     top: 50%;
     transform: translateY(-50%);
-    white-space: nowrap;       /* keep "RS:123" on one line */
-    pointer-events: none;      /* taps drag the scroller underneath instead */
+    white-space: nowrap;
+    pointer-events: none;
   }
 
-  /* (unchanged) position icons */
+  /* icons (unchanged) */
   li.name .race_position{
     background:url(/images/v2/racing/car_status.svg) 0 0 no-repeat;
     display:inline-block; width:20px; height:18px; vertical-align:text-bottom;
@@ -685,7 +685,15 @@ function jqueryDependantInitializations() {
   li.name .race_position.gold{   background-position:0 0; }
   li.name .race_position.silver{ background-position:0 -22px; }
   li.name .race_position.bronze{ background-position:0 -44px; }
+
+  /* Give the scrolling content some breathing room so it never hides under RS */
+ul.driver-item > li.name .name-scroll{
+  padding-right: 64px;  /* match the li.name padding-right */
+}
+
 `);
+
+  
 
 
     } catch(e) {
