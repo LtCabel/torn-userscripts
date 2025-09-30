@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      0.7.0
+// @version      0.7.1
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -647,27 +647,28 @@ function jqueryDependantInitializations() {
         }
 
         // Styles
-       GM_addStyle(`
-  /* Parent cell creates room for RS and never scrolls */
+      GM_addStyle(`
+  /* Parent cell: reserve space for RS, but don’t clip */
   ul.driver-item > li.name{
     position: relative;
-    overflow: hidden;
-    padding-right: 64px;      /* space for RS badge */
+    padding-right: 64px;   /* space for RS badge */
   }
 
-  /* Only this child scrolls horizontally */
+  /* Scrollable text wrapper */
   ul.driver-item > li.name .name-scroll{
-    display: block;
-    width: 100%;
+    display: inline-block;
+    min-width: 100%;
+    width: max-content;           /* grow to actual content */
     white-space: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     touch-action: pan-x;
+    padding-right: 64px;          /* make sure tail end doesn’t hide under RS */
   }
   ul.driver-item > li.name .name-scroll::-webkit-scrollbar{ display:none; }
 
-  /* RS badge is pinned and does NOT scroll */
+  /* RS badge pinned on the right */
   ul.driver-item > li.name .rs-display{
     position: absolute;
     right: 8px;
@@ -685,12 +686,6 @@ function jqueryDependantInitializations() {
   li.name .race_position.gold{   background-position:0 0; }
   li.name .race_position.silver{ background-position:0 -22px; }
   li.name .race_position.bronze{ background-position:0 -44px; }
-
-  /* Give the scrolling content some breathing room so it never hides under RS */
-ul.driver-item > li.name .name-scroll{
-  padding-right: 64px;  /* match the li.name padding-right */
-}
-
 `);
 
   
