@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      0.7.5
+// @version      0.7.6
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -428,20 +428,20 @@ function showResults(results, start = 0) {
   // Map leaderboard rows by numeric userId
   const rowByUserId = {};
   $('#leaderBoard > li').each(function () {
-    const idAttr = this.id || '';                   // may be empty
-    const m = idAttr.match(/(\d+)/);                // grab the number anywhere in the id
-    if (!m) return;                                 // skip rows without a numeric id
-    rowByUserId[+m[1]] = $(this).find('li.name');   // cache the <li class="name"> for that user
+    const idAttr = this.id || '';
+    const m = idAttr.match(/(\d+)/);
+    if (!m) return;
+    rowByUserId[+m[1]] = $(this).find('li.name');
   });
 
   for (let i = 0; i < results.length; i++) {
     const userId = +results[i][1];
     const nameLi = rowByUserId[userId];
-    if (!nameLi || nameLi.length === 0) continue;   // couldn’t find a row for this racer
+    if (!nameLi || nameLi.length === 0) continue;
 
     const name = results[i][0];
     const p = i + start + 1;
-    const position = p === 1 ? 'gold' : p === 2 ? 'silver' : p === 3 ? 'bronze' : '';
+    const position = p === 1 ? 'gold' : (p === 2 ? 'silver' : (p === 3 ? 'bronze' : ''));
     const place = (p != 11 && p % 10 == 1) ? p + 'st'
                 : (p != 12 && p % 10 == 2) ? p + 'nd'
                 : (p != 13 && p % 10 == 3) ? p + 'rd' : p + 'th';
@@ -449,24 +449,24 @@ function showResults(results, start = 0) {
     const result  = (typeof results[i][2] === 'number') ? formatTimeMsec(results[i][2] * 1000) : results[i][2];
     const bestLap = results[i][3] ? ` (best: ${formatTimeMsec(results[i][3] * 1000)})` : '';
 
-    const rsBadge = nameLi.find('.rs-display').prop('outerHTML') || '';
+    // Detach RS so it doesn't end up inside the scroller
+    const $rs = nameLi.find('.rs-display').detach();
+    const rsBadge = $rs.length ? $rs[0].outerHTML : '';
 
-const iconHtml = (SHOW_POSITION_ICONS && position) ? `<i class="race_position ${position}"></i>` : '';
-const textHtml = `${iconHtml}<span class="race-name">${plainName}</span> <span class="race-place">${place}</span> ${result}${bestLap}`;
+    const iconHtml = (SHOW_POSITION_ICONS && position) ? `<i class="race_position ${position}"></i>` : '';
+    const textHtml = `${iconHtml}<span class="race-name">${name}</span> <span class="race-place">${place}</span> ${result}${bestLap}`;
 
-// ensure scroll wrapper exists exactly once
-if (!nameLi.find('.name-scroll').length) {
-  nameLi.wrapInner('<span class="name-scroll"></span>');
+    // Ensure scroll wrapper exists exactly once
+    if (!nameLi.find('.name-scroll').length) {
+      nameLi.wrapInner('<span class="name-scroll"></span>');
+    }
+    nameLi.find('.name-scroll').html(textHtml);
+
+    // Re-append RS badge (outside the scrolling span)
+    if (rsBadge) nameLi.append(rsBadge);
+  }
 }
 
-// update the scrolling text
-nameLi.find('.name-scroll').html(textHtml);
-
-// ensure RS badge exists (append if it was missing)
-if (rsBadge && !nameLi.find('.rs-display').length) {
-  nameLi.append(rsBadge);
- }
-}
 
 
 
