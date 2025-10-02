@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      0.7.3
+// @version      0.7.4
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -425,46 +425,38 @@ function compare(a, b) {
 }
 
 function showResults(results, start = 0) {
+  // Map leaderboard rows by numeric userId
+  const rowByUserId = {};
+  $('#leaderBoard > li').each(function () {
+    const idAttr = this.id || '';                   // may be empty
+    const m = idAttr.match(/(\d+)/);                // grab the number anywhere in the id
+    if (!m) return;                                 // skip rows without a numeric id
+    rowByUserId[+m[1]] = $(this).find('li.name');   // cache the <li class="name"> for that user
+  });
+
   for (let i = 0; i < results.length; i++) {
-    $('#leaderBoard').children('li').each(function () {
-      const nameLi = $(this).find('li.name');
-      const plainName = nameLi.clone().children().remove().end().text().trim();
-      if (plainName === results[i][0]) {
-        const p = i + stafunction showResults(results, start = 0) {
-  for (let i = 0; i < results.length; i++) {
-    const userId = +results[i][1];               // use the id we parsed earlier
-    $('#leaderBoard').children('li').each(function () {
-      // each li’s id looks like "user123456" (4-char prefix, then number)
-      const liUserId = +this.id.substr(4);
-      if (liUserId === userId) {
-        const nameLi   = $(this).find('li.name');
-        const rawName  = nameLi.contents().filter(function(){ return this.nodeType === 3; }).text().trim() 
-                       || nameLi.find('.race-name').text().trim() 
-                       || nameLi.text().trim();   // fallback if needed
+    const userId = +results[i][1];
+    const nameLi = rowByUserId[userId];
+    if (!nameLi || nameLi.length === 0) continue;   // couldn’t find a row for this racer
 
-        const p = i + start + 1;
-        const position = p === 1 ? 'gold' : (p === 2 ? 'silver' : (p === 3 ? 'bronze' : ''));
-        const place = (p != 11 && p % 10 == 1) ? p+'st'
-                    : (p != 12 && p % 10 == 2) ? p+'nd'
-                    : (p != 13 && p % 10 == 3) ? p+'rd' : p+'th';
+    const name = results[i][0];
+    const p = i + start + 1;
+    const position = p === 1 ? 'gold' : p === 2 ? 'silver' : p === 3 ? 'bronze' : '';
+    const place = (p != 11 && p % 10 == 1) ? p + 'st'
+                : (p != 12 && p % 10 == 2) ? p + 'nd'
+                : (p != 13 && p % 10 == 3) ? p + 'rd' : p + 'th';
 
-        const result  = (typeof results[i][2] === 'number') ? formatTimeMsec(results[i][2]*1000) : results[i][2];
-        const bestLap = results[i][3] ? ` (best: ${formatTimeMsec(results[i][3]*1000)})` : '';
+    const result  = (typeof results[i][2] === 'number') ? formatTimeMsec(results[i][2] * 1000) : results[i][2];
+    const bestLap = results[i][3] ? ` (best: ${formatTimeMsec(results[i][3] * 1000)})` : '';
 
-        // keep the RS badge, but outside the scroll area
-        const rsBadge = nameLi.find('.rs-display').prop('outerHTML') || '';
-        nameLi.find('.rs-display').remove();
+    // keep RS badge pinned on the right, outside scroll
+    const rsBadge = nameLi.find('.rs-display').prop('outerHTML') || '';
+    nameLi.find('.rs-display').remove();
 
-        const iconHtml = (SHOW_POSITION_ICONS && position) ? `<i class="race_position ${position}"></i>` : '';
-        const textHtml = `${iconHtml}<span class="race-name">${rawName}</span> <span class="race-place">${place}</span> ${result}${bestLap}`;
+    const iconHtml = (SHOW_POSITION_ICONS && position) ? `<i class="race_position ${position}"></i>` : '';
+    const html = `<span class="name-scroll">${iconHtml}<span class="race-name">${name}</span> <span class="race-place">${place}</span> ${result}${bestLap}</span>${rsBadge}`;
 
-        nameLi
-          .attr('data-layout', 'stacked')
-          .html(`<span class="name-scroll">${textHtml}</span>${rsBadge}`);
-
-        return false; // break .each
-      }
-    });
+    nameLi.html(html);
   }
 }
 
