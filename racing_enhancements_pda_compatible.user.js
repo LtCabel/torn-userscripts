@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      0.7.9
+// @version      0.8.0
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -660,6 +660,67 @@ function ajax(callback) {
     }
 }
 
+function showCsvModal(csvText, fileName) {
+  // If already present, just update + show
+  let modal = document.getElementById('csv-viewer-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'csv-viewer-modal';
+    modal.innerHTML = `
+      <div class="csv-backdrop"></div>
+      <div class="csv-panel">
+        <div class="csv-header">
+          <span class="csv-title">${fileName}</span>
+          <div class="csv-actions">
+            <button id="csv-copy-btn" type="button">Copy</button>
+            <button id="csv-share-btn" type="button" style="display:none">Share</button>
+            <button id="csv-close-btn" type="button">Close</button>
+          </div>
+        </div>
+        <pre class="csv-body" id="csv-body"></pre>
+      </div>`;
+    document.body.appendChild(modal);
+
+    // Wire buttons
+    modal.querySelector('#csv-close-btn').addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+    modal.querySelector('.csv-backdrop').addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+    modal.querySelector('#csv-copy-btn').addEventListener('click', async () => {
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(csvText);
+          alert('CSV copied to clipboard.');
+        } else {
+          prompt('Copy the CSV:', csvText);
+        }
+      } catch {
+        prompt('Copy the CSV:', csvText);
+      }
+    });
+
+    // Optional: system share on devices that support it
+    if (navigator.share) {
+      const shareBtn = modal.querySelector('#csv-share-btn');
+      shareBtn.style.display = '';
+      shareBtn.addEventListener('click', async () => {
+        try {
+          await navigator.share({ title: fileName, text: csvText });
+        } catch(_) {}
+      });
+    }
+  }
+
+  // Update contents + show
+  modal.querySelector('.csv-title').textContent = fileName;
+  modal.querySelector('#csv-body').textContent = csvText;
+  modal.style.display = 'block';
+}
+
+
+
 // -------------------- Main wiring --------------------
 'use strict';
 
@@ -764,6 +825,30 @@ function jqueryDependantInitializations() {
   li.name .race_position.gold{   background-position:0 0; }
   li.name .race_position.silver{ background-position:0 -22px; }
   li.name .race_position.bronze{ background-position:0 -44px; }
+`);
+
+        GM_addStyle(`
+#csv-viewer-modal { position: fixed; inset: 0; z-index: 99999; display: none; }
+#csv-viewer-modal .csv-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.55); }
+#csv-viewer-modal .csv-panel {
+  position: absolute; left: 5%; right: 5%; top: 10%; bottom: 10%;
+  background: #1c1c1c; color: #eaeaea; border-radius: 8px; display: flex; flex-direction: column;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5); border: 1px solid #333;
+}
+#csv-viewer-modal .csv-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; border-bottom: 1px solid #333; font-weight: 600;
+}
+#csv-viewer-modal .csv-actions button {
+  margin-left: 8px; padding: 6px 10px; background: #2a2a2a; color: #eaeaea; border: 1px solid #444; border-radius: 6px;
+}
+#csv-viewer-modal .csv-body {
+  flex: 1; margin: 0; padding: 10px 12px; overflow: auto; white-space: pre; font: 12px/1.4 monospace;
+  -webkit-overflow-scrolling: touch;
+}
+@media (min-width: 860px){
+  #csv-viewer-modal .csv-panel { left: 15%; right: 15%; top: 10%; bottom: 10%; }
+}
 `);
 
   
