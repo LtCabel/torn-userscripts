@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      0.7.8
+// @version      0.7.9
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -555,12 +555,22 @@ function addExportButton(results, crashes, my_name, race_id, time_ended) {
       `);
       btns.insertAfter('#racingEnhSettings');
 
-      // Open: navigate to blob URL (user can Share/Save from the viewer)
-      $('#openCsv').on('click', function(e){
-        e.preventDefault();
-        // Some WebViews block window.open; navigation works better
-        location.href = url;
-      });
+      // Open: prefer a new tab with data URL; fallback to in-page modal
+$('#openCsv').on('click', function(e){
+  e.preventDefault();
+
+  // Build a data URL (better supported in WebViews than blob:)
+  const dataUrl = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+
+  // Try a new tab first
+  const win = window.open(dataUrl, '_blank', 'noopener,noreferrer');
+
+  if (!win) {
+    // Popups blocked or WebView ignores _blank — show inline modal as fallback
+    showCsvModal(csv, fileName);
+  }
+});
+
 
       // Copy: use clipboard API, fallback to prompt
       $('#copyCsv').on('click', async function(e){
