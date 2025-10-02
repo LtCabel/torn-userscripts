@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      0.7.4
+// @version      0.7.5
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -449,15 +449,23 @@ function showResults(results, start = 0) {
     const result  = (typeof results[i][2] === 'number') ? formatTimeMsec(results[i][2] * 1000) : results[i][2];
     const bestLap = results[i][3] ? ` (best: ${formatTimeMsec(results[i][3] * 1000)})` : '';
 
-    // keep RS badge pinned on the right, outside scroll
     const rsBadge = nameLi.find('.rs-display').prop('outerHTML') || '';
-    nameLi.find('.rs-display').remove();
 
-    const iconHtml = (SHOW_POSITION_ICONS && position) ? `<i class="race_position ${position}"></i>` : '';
-    const html = `<span class="name-scroll">${iconHtml}<span class="race-name">${name}</span> <span class="race-place">${place}</span> ${result}${bestLap}</span>${rsBadge}`;
+const iconHtml = (SHOW_POSITION_ICONS && position) ? `<i class="race_position ${position}"></i>` : '';
+const textHtml = `${iconHtml}<span class="race-name">${plainName}</span> <span class="race-place">${place}</span> ${result}${bestLap}`;
 
-    nameLi.html(html);
-  }
+// ensure scroll wrapper exists exactly once
+if (!nameLi.find('.name-scroll').length) {
+  nameLi.wrapInner('<span class="name-scroll"></span>');
+}
+
+// update the scrolling text
+nameLi.find('.name-scroll').html(textHtml);
+
+// ensure RS badge exists (append if it was missing)
+if (rsBadge && !nameLi.find('.rs-display').length) {
+  nameLi.append(rsBadge);
+ }
 }
 
 
@@ -653,38 +661,38 @@ function jqueryDependantInitializations() {
         }
 
         // Styles
-      GM_addStyle(`
-  /* Parent cell: reserve space for RS, but don’t clip */
+     GM_addStyle(`
+  /* Name cell: clip long text and reserve space for RS */
   ul.driver-item > li.name{
-    position: relative;
-    padding-right: 64px;   /* space for RS badge */
+    position: relative !important;
+    overflow: hidden !important;
+    padding-right: 72px !important;   /* room for RS */
+    box-sizing: border-box !important;
   }
 
-  /* Scrollable text wrapper */
+  /* Only this child scrolls horizontally */
   ul.driver-item > li.name .name-scroll{
-    display: inline-block;
-    min-width: 100%;
-    width: max-content;           /* grow to actual content */
-    white-space: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    touch-action: pan-x;
-    padding-right: 64px;          /* make sure tail end doesn’t hide under RS */
+    display: block !important;
+    max-width: 100% !important;
+    white-space: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    touch-action: pan-x !important;
   }
   ul.driver-item > li.name .name-scroll::-webkit-scrollbar{ display:none; }
 
-  /* RS badge pinned on the right */
+  /* RS badge fixed on the right, never scrolls */
   ul.driver-item > li.name .rs-display{
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    white-space: nowrap;
-    pointer-events: none;
+    position: absolute !important;
+    right: 8px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    white-space: nowrap !important;
+    pointer-events: none !important;
   }
 
-  /* icons (unchanged) */
+  /* Icons (unchanged) */
   li.name .race_position{
     background:url(/images/v2/racing/car_status.svg) 0 0 no-repeat;
     display:inline-block; width:20px; height:18px; vertical-align:text-bottom;
@@ -693,7 +701,6 @@ function jqueryDependantInitializations() {
   li.name .race_position.silver{ background-position:0 -22px; }
   li.name .race_position.bronze{ background-position:0 -44px; }
 `);
-
 
   
 
