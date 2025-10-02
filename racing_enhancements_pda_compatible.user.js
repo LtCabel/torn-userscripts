@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      0.8.0
+// @version      0.8.1
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -507,89 +507,44 @@ function addSettingsDiv() {
 }
 
 function addExportButton(results, crashes, my_name, race_id, time_ended) {
-  if ($("#racingupdatesnew").size() > 0 && $('#downloadAsCsv').size() < 1) {
-    // build CSV
-    let csv = 'position,name,id,time,best_lap,rs\n';
-    for (let i = 0; i < results.length; i++) {
-      const timeStr = formatTimeMsec(results[i][2] * 1000, true);
-      const bestLap = formatTimeMsec(results[i][3] * 1000);
-      csv += [i+1, results[i][0], results[i][1], timeStr, bestLap,
-              (results[i][0] === my_name ? GM_getValue('racinglevel') : '')].join(',') + '\n';
-    }
-    for (let i = 0; i < crashes.length; i++) {
-      csv += [results.length + i + 1, crashes[i][0], crashes[i][1], crashes[i][2], '',
-              (results[i][0] === my_name ? GM_getValue('racinglevel') : '')].join(',') + '\n';
-    }
-
-    const timeE   = new Date(); timeE.setTime(time_ended * 1000);
-    const fileName = `${timeE.getUTCFullYear()}${pad(timeE.getUTCMonth() + 1, 2)}${pad(timeE.getUTCDate(), 2)}-race_${race_id}.csv`;
-
-    // capability + WebView detection
-    const a = document.createElement('a');
-    const supportsDownload = 'download' in a;
-    const isWebView = /TornPDA|wv;|; wv|FBAN|FBAV|Line\/|Instagram/i.test(navigator.userAgent);
-
-    if (supportsDownload && !isWebView) {
-      // Desktop / real browsers: normal download
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-      const url  = URL.createObjectURL(blob);
-      const exportBtn = `<a id="downloadAsCsv" href="${url}" style="float:right; margin-left:12px;" download="${fileName}">Download results as CSV</a>`;
-      $(exportBtn).insertAfter('#racingEnhSettings');
-    } else {
-      // PDA / WebView fallback: open or copy
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-      const url  = URL.createObjectURL(blob);
-
-      // Buttons: Open (navigates to blob) and Copy
-      const btns = $(`
-        <span id="downloadAsCsv" style="float:right; margin-left:12px;">
-          <a href="#" id="openCsv" class="link btn-action-tab tt-modified" style="margin-right:8px;">
-            <i style="display:inline-block; background:url(/images/v2/racing/car_enlist.png) 0 0 no-repeat; vertical-align:middle; height:15px; width:15px;"></i>
-            Open CSV
-          </a>
-          <a href="#" id="copyCsv" class="link btn-action-tab tt-modified">
-            <i style="display:inline-block; background:url(/images/v2/racing/car_enlist.png) 0 0 no-repeat; vertical-align:middle; height:15px; width:15px;"></i>
-            Copy CSV
-          </a>
-        </span>
-      `);
-      btns.insertAfter('#racingEnhSettings');
-
-      // Open: prefer a new tab with data URL; fallback to in-page modal
-$('#openCsv').on('click', function(e){
-  e.preventDefault();
-
-  // Build a data URL (better supported in WebViews than blob:)
-  const dataUrl = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-
-  // Try a new tab first
-  const win = window.open(dataUrl, '_blank', 'noopener,noreferrer');
-
-  if (!win) {
-    // Popups blocked or WebView ignores _blank — show inline modal as fallback
-    showCsvModal(csv, fileName);
-  }
-});
-
-
-      // Copy: use clipboard API, fallback to prompt
-      $('#copyCsv').on('click', async function(e){
-        e.preventDefault();
-        try {
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            await navigator.clipboard.writeText(csv);
-            alert('CSV copied to clipboard.');
-          } else {
-            throw new Error('No clipboard API');
-          }
-        } catch {
-          // Old WebViews: show a prompt to copy manually
-          prompt('Copy the CSV:', csv);
+    if ($("#racingupdatesnew").size() > 0 && $('#downloadAsCsv').size() < 1 && $('#copyCsvBtn').size() < 1) {
+        let csv = 'position,name,id,time,best_lap,rs\n';
+        for (let i = 0; i < results.length; i++) {
+            const timeStr = formatTimeMsec(results[i][2] * 1000, true);
+            const bestLap = formatTimeMsec(results[i][3] * 1000);
+            csv += [i+1, results[i][0], results[i][1], timeStr, bestLap, (results[i][0] === my_name ? GM_getValue('racinglevel') : '')].join(',') + '\n';
         }
-      });
+        for (let i = 0; i < crashes.length; i++) {
+            csv += [results.length + i + 1, crashes[i][0], crashes[i][1], crashes[i][2], '', (crashes[i][0] === my_name ? GM_getValue('racinglevel') : '')].join(',') + '\n';
+        }
+
+        const timeE = new Date(); timeE.setTime(time_ended * 1000);
+        const fileName = `${timeE.getUTCFullYear()}${pad(timeE.getUTCMonth() + 1, 2)}${pad(timeE.getUTCDate(), 2)}-race_${race_id}.csv`;
+
+        const isWebView = /TornPDA|wv;|; wv|FBAN|FBAV|Line\/|Instagram/i.test(navigator.userAgent);
+
+        if (!isWebView) {
+            // Desktop flow: download CSV
+            const myblob = new Blob([csv], { type: 'text/csv' });
+            const myurl  = window.URL.createObjectURL(myblob);
+            const exportBtn = `<a id="downloadAsCsv" href="${myurl}" style="float: right; margin-left: 12px;" download="${fileName}">Download results as CSV</a>`;
+            $(exportBtn).insertAfter('#racingEnhSettings');
+        } else {
+            // Torn PDA flow: copy CSV
+            const copyBtn = $('<a id="copyCsvBtn" href="#" style="float: right; margin-left: 12px;">Copy results as CSV</a>');
+            copyBtn.on('click', function(e) {
+                e.preventDefault();
+                navigator.clipboard.writeText(csv).then(() => {
+                    alert("Race results copied to clipboard!");
+                }).catch(() => {
+                    prompt("Copy race results manually:", csv);
+                });
+            });
+            $('#racingEnhSettings').after(copyBtn);
+        }
     }
-  }
 }
+
 
 
 function addPlaybackButton() {
