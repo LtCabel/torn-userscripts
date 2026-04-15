@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements TEST
 // @namespace    ltcabel.racing_enhancements.test
-// @updateURL    https://raw.githubusercontent.com/LtCabel/torn-userscripts/master/racing_enhancements_pda_test.user.js
-// @downloadURL  https://raw.githubusercontent.com/LtCabel/torn-userscripts/master/racing_enhancements_pda_test.user.js
+// @updateURL    https://raw.githubusercontent.com/LtCabel/torn-userscripts/master/racing_enhancements_TEST.user.js
+// @downloadURL  https://raw.githubusercontent.com/LtCabel/torn-userscripts/master/racing_enhancements_TEST.user.js
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
