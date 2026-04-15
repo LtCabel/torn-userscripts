@@ -374,7 +374,7 @@ function parseRacingData(data) {
     // race link
     if ($('#raceLink').size() < 1) {
         RACE_ID = data.raceID;
-        const raceLink = `<a id="raceLink" href="https://www.torn.com/loader.php?sid=racing&tab=log&raceID=${RACE_ID}" style="float: right; margin-left: 12px;">Link to the race</a>`;
+        const raceLink = `<a id="raceLink" href="https://www.torn.com/page.php?sid=racing&tab=log&raceID=${RACE_ID}" style="float: right; margin-left: 12px;">Link to the race</a>`;
         $(raceLink).insertAfter('#racingEnhSettings');
     }
 
@@ -424,49 +424,65 @@ function compare(a, b) {
 }
 
 function showResults(results, start = 0) {
-  // Map leaderboard rows by numeric userId
+  const board = document.getElementById('leaderBoard');
+  if (!board) return;
+
+  // Build row map once
   const rowByUserId = {};
-  $('#leaderBoard > li').each(function () {
-    const idAttr = this.id || '';
-    const m = idAttr.match(/(\d+)/);
+  board.querySelectorAll(':scope > li').forEach(row => {
+    const m = (row.id || '').match(/(\d+)/);
     if (!m) return;
-    rowByUserId[+m[1]] = $(this).find('li.name');
+    const nameLi = row.querySelector('li.name');
+    if (nameLi) rowByUserId[+m[1]] = nameLi;
   });
 
   for (let i = 0; i < results.length; i++) {
     const userId = +results[i][1];
     const nameLi = rowByUserId[userId];
-    if (!nameLi || nameLi.length === 0) continue;
+    if (!nameLi) continue;
 
     const name = results[i][0];
     const p = i + start + 1;
-    const position = p === 1 ? 'gold' : (p === 2 ? 'silver' : (p === 3 ? 'bronze' : ''));
+    const position = p === 1 ? 'gold' : p === 2 ? 'silver' : p === 3 ? 'bronze' : '';
     const place = (p != 11 && p % 10 == 1) ? p + 'st'
                 : (p != 12 && p % 10 == 2) ? p + 'nd'
-                : (p != 13 && p % 10 == 3) ? p + 'rd' : p + 'th';
+                : (p != 13 && p % 10 == 3) ? p + 'rd'
+                : p + 'th';
 
-    const result  = (typeof results[i][2] === 'number') ? formatTimeMsec(results[i][2] * 1000) : results[i][2];
-    const bestLap = results[i][3] ? ` (best: ${formatTimeMsec(results[i][3] * 1000)})` : '';
+    const result = (typeof results[i][2] === 'number')
+      ? formatTimeMsec(results[i][2] * 1000)
+      : results[i][2];
+    const bestLap = results[i][3]
+      ? ` (best: ${formatTimeMsec(results[i][3] * 1000)})`
+      : '';
 
-    // Detach RS so it doesn't end up inside the scroller
-    const $rs = nameLi.find('.rs-display').detach();
-    const rsBadge = $rs.length ? $rs[0].outerHTML : '';
+    const iconHtml = (SHOW_POSITION_ICONS && position)
+      ? `<i class="race_position ${position}"></i>`
+      : '';
 
-    const iconHtml = (SHOW_POSITION_ICONS && position) ? `<i class="race_position ${position}"></i>` : '';
     const textHtml = `${iconHtml}<span class="race-name">${name}</span> <span class="race-place">${place}</span> ${result}${bestLap}`;
 
-    // Ensure scroll wrapper exists exactly once
-    if (!nameLi.find('.name-scroll').length) {
-      nameLi.wrapInner('<span class="name-scroll"></span>');
-    }
-    nameLi.find('.name-scroll').html(textHtml);
+    let scrollSpan = nameLi.querySelector('.name-scroll');
+    let rsBadge = nameLi.querySelector('.rs-display');
 
-    // Re-append RS badge (outside the scrolling span)
-    if (rsBadge) nameLi.append(rsBadge);
+    if (!scrollSpan) {
+      scrollSpan = document.createElement('span');
+      scrollSpan.className = 'name-scroll';
+
+      const existingRs = rsBadge ? rsBadge.cloneNode(true) : null;
+      nameLi.innerHTML = '';
+      nameLi.appendChild(scrollSpan);
+      if (existingRs) {
+        nameLi.appendChild(existingRs);
+        rsBadge = existingRs;
+      }
+    }
+
+    if (scrollSpan.innerHTML !== textHtml) {
+      scrollSpan.innerHTML = textHtml;
+    }
   }
 }
-
-
 
 
 
