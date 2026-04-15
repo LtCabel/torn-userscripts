@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.0.2
+// @version      1.0.3
 
 // ==/UserScript==
 
@@ -715,10 +715,17 @@ ajax((page, xhr) => {
     }
 
     try {
-        parseRacingData(JSON.parse(xhr.responseText));
+        const parsed = JSON.parse(xhr.responseText);
+        requestAnimationFrame(() => {
+            try {
+                parseRacingData(parsed);
+            } catch (e) {
+                console.debug('[Racing Enhancements PDA] Could not parse racing data', e);
+            }
+    });
     } catch (e) {
         console.debug('[Racing Enhancements PDA] Could not parse racing data', e);
-    }
+}
 
     // Highlight JLT custom events
     const JltColor = '#fff200';
