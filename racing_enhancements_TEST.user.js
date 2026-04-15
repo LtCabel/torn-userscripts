@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.0.1
+// @version      1.0.2
 
 // ==/UserScript==
 
@@ -384,7 +384,9 @@ function parseRacingData(data) {
     // results when race finished
     if (data.timeData.status >= 3) {
         const raceKey = `${data.raceID}:${data.timeData.status}:${data.timeData.timeEnded}`;
-        if (lastRenderedRaceKey === raceKey) return;
+        const resultsAlreadyInDom = !!document.querySelector('#leaderBoard .name-scroll');
+
+        if (lastRenderedRaceKey === raceKey && resultsAlreadyInDom) return;
         lastRenderedRaceKey = raceKey;
     
         const carsData       = data.raceData.cars;
