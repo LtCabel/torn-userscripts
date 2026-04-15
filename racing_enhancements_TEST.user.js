@@ -15,6 +15,8 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
+// @version      1.0.0
+
 // ==/UserScript==
 
 console.log("[Racing Enhancements PDA] starting");
