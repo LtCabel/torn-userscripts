@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.0.3
+// @version      1.0.4
 
 // ==/UserScript==
 
@@ -69,36 +69,48 @@ async function updateDriversList() {
     updating = true;
     $('#updating').size() < 1 && $('#racingupdatesnew').prepend('<div id="updating" style="color: green; font-size: 12px; line-height: 24px;">Updating drivers\' RS and skins...</div>');
 
-    const racingSkills = FETCH_RS ? await getRacingSkillForDrivers(driverIds) : {};
-    const racingSkins  = SHOW_SKINS ? await getRacingSkinOwners(driverIds)  : {};
-    for (let driver of driversList.querySelectorAll('.driver-item')) {
-        const driverId = getDriverId(driver);
+const racingSkills = FETCH_RS ? await getRacingSkillForDrivers(driverIds) : {};
+const racingSkins  = SHOW_SKINS ? await getRacingSkinOwners(driverIds)  : {};
 
-        // RS badge
-        if (FETCH_RS && !!racingSkills[driverId]) {
-            const skill   = racingSkills[driverId];
-            const nameDiv = driver.querySelector('.name');
-            nameDiv.style.position = 'relative';
-            if (!driver.querySelector('.rs-display')) {
-                nameDiv.insertAdjacentHTML('beforeend', `<span class="rs-display">RS:${skill}</span>`);
-            }
-        } else if (!FETCH_RS) {
-            const rsSpan = driver.querySelector('.rs-display');
-            if (!!rsSpan) rsSpan.remove();
+const driverNodes = driversList.querySelectorAll('.driver-item');
+for (const driver of driverNodes) {
+    const driverId = getDriverId(driver);
+    const nameDiv = driver.querySelector('.name');
+    if (!nameDiv) continue;
+
+    if (FETCH_RS && racingSkills[driverId]) {
+        nameDiv.style.position = 'relative';
+        let rsSpan = nameDiv.querySelector('.rs-display');
+        const rsText = `RS:${racingSkills[driverId]}`;
+
+        if (!rsSpan) {
+            rsSpan = document.createElement('span');
+            rsSpan.className = 'rs-display';
+            rsSpan.textContent = rsText;
+            nameDiv.appendChild(rsSpan);
+        } else if (rsSpan.textContent !== rsText) {
+            rsSpan.textContent = rsText;
         }
+    } else if (!FETCH_RS) {
+        const rsSpan = nameDiv.querySelector('.rs-display');
+        if (rsSpan) rsSpan.remove();
+    }
 
-        // Skin
-        if (SHOW_SKINS && !!racingSkins[driverId]) {
-            const carImg = driver.querySelector('.car')?.querySelector('img');
-            if (carImg) {
-                const carId = carImg.getAttribute('src').replace(/[^0-9]*/g, '');
-                if (!!racingSkins[driverId][carId]) {
-                    carImg.setAttribute('src', SKIN_IMAGE(racingSkins[driverId][carId]));
-                    if (driverId == userID) skinCarSidebar(racingSkins[driverId][carId]);
+    if (SHOW_SKINS && racingSkins[driverId]) {
+        const carImg = driver.querySelector('.car img');
+        if (carImg) {
+            const carId = carImg.getAttribute('src').replace(/[^0-9]*/g, '');
+            const skinId = racingSkins[driverId][carId];
+            if (skinId) {
+                const skinSrc = SKIN_IMAGE(skinId);
+                if (carImg.getAttribute('src') !== skinSrc) {
+                    carImg.setAttribute('src', skinSrc);
                 }
+                if (driverId == userID) skinCarSidebar(skinId);
             }
         }
     }
+}
 
     updating = false;
     $('#updating').size() > 0 && $('#updating').remove();
