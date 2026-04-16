@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.0.8
+// @version      1.1.0
 
 // ==/UserScript==
 
@@ -41,6 +41,9 @@ let   x = 0;
 let   penaltyNotif = 0;
 let   lastRenderedRaceKey = null;
 
+const RS_CACHE_KEY = 'racingSkillCachePersisted';
+const RS_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
 // -------------------- Helpers --------------------
 function maybeClear() {
     if (x != 0 ) {
@@ -55,6 +58,31 @@ function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 const racingSkillFetchInFlight = new Set();
 const racingSkillCacheByDriverId = new Map();
 let updating = false;
+
+// ---- RS persistent cache helpers ----
+function loadPersistedRacingSkillCache() {
+    const persisted = GM_getValue(RS_CACHE_KEY, {});
+    const now = Date.now();
+
+    for (const [driverId, entry] of Object.entries(persisted)) {
+        if (!entry || typeof entry.skill === 'undefined' || typeof entry.ts !== 'number') continue;
+        if ((now - entry.ts) > RS_CACHE_MAX_AGE_MS) continue;
+
+        racingSkillCacheByDriverId.set(+driverId, entry.skill);
+    }
+}
+
+function persistRacingSkill(driverId, skill) {
+    const persisted = GM_getValue(RS_CACHE_KEY, {});
+    persisted[String(driverId)] = {
+        skill: skill,
+        ts: Date.now()
+    };
+    GM_setValue(RS_CACHE_KEY, persisted);
+}
+
+// Load cache immediately after defining helpers
+loadPersistedRacingSkillCache();
 
 async function updateDriversList() {
     const driversList = document.getElementById('leaderBoard');
@@ -206,9 +234,15 @@ async function getRacingSkillForDrivers(driverIds, onDriverFetched) {
 
    for (const driverId of driverIdsToFetch) {
         const json = await fetchRacingSkillForDrivers(driverId);
-        racingSkillCacheByDriverId.set(+driverId,
-            json && json.personalstats && json.personalstats.racingskill ? json.personalstats.racingskill : 'N/A'
-        );
+        const fetchedSkill = json && json.personalstats && json.personalstats.racingskill
+            ? json.personalstats.racingskill
+            : 'N/A';
+
+        racingSkillCacheByDriverId.set(+driverId, fetchedSkill);
+
+        if (fetchedSkill !== 'N/A') {
+            persistRacingSkill(+driverId, fetchedSkill);
+}
 
         if (json && json.error) {
             $('#racingupdatesnew').prepend(`<div style="color: red; font-size: 12px; line-height: 24px;">API error: ${JSON.stringify(json.error)}</div>`);
@@ -632,14 +666,14 @@ function addSettingsDiv() {
 
 function addExportButton(results, crashes, my_name, race_id, time_ended) {
     if ($("#racingupdatesnew").size() > 0 && $('#downloadAsCsv').size() < 1 && $('#copyCsvBtn').size() < 1) {
-        let csv = 'position,name,id,time,best_lap,rs\n';
+        let csv = 'position,name,id,time,best_lap\n';
         for (let i = 0; i < results.length; i++) {
             const timeStr = formatTimeMsec(results[i][2] * 1000, true);
             const bestLap = formatTimeMsec(results[i][3] * 1000);
-            csv += [i+1, results[i][0], results[i][1], timeStr, bestLap, (results[i][0] === my_name ? GM_getValue('racinglevel') : '')].join(',') + '\n';
+            csv += [i+1, results[i][0], results[i][1], timeStr, bestLap].join(',') + '\n';
         }
         for (let i = 0; i < crashes.length; i++) {
-            csv += [results.length + i + 1, crashes[i][0], crashes[i][1], crashes[i][2], '', (crashes[i][0] === my_name ? GM_getValue('racinglevel') : '')].join(',') + '\n';
+            csv += [results.length + i + 1, crashes[i][0], crashes[i][1], crashes[i][2], ''].join(',') + '\n';
         }
 
         const timeE = new Date(); timeE.setTime(time_ended * 1000);
