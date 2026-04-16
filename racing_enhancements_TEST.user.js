@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.0.5
+// @version      1.0.6
 
 // ==/UserScript==
 
@@ -129,16 +129,18 @@ if (FETCH_RS) {
     const missingDriverIds = driverIds.filter(driverId => !racingSkillCacheByDriverId.has(driverId));
 
     if (missingDriverIds.length) {
-        getRacingSkillForDrivers(missingDriverIds)
-            .then(() => {
-                const freshDriversList = document.getElementById('leaderBoard');
-                if (!freshDriversList) return;
+        getRacingSkillForDrivers(missingDriverIds, (fetchedDriverId) => {
+            const freshDriversList = document.getElementById('leaderBoard');
+            if (!freshDriversList) return;
 
-                const freshDriverNodes = freshDriversList.querySelectorAll('.driver-item');
-                for (const driver of freshDriverNodes) {
+            const freshDriverNodes = freshDriversList.querySelectorAll('.driver-item');
+            for (const driver of freshDriverNodes) {
+                if (getDriverId(driver) === fetchedDriverId) {
                     paintDriverRow(driver);
+                    break;
                 }
-            })
+            }
+        })
             .catch(err => {
                 console.error('[Racing Enhancements PDA] RS background fetch failed', err);
             })
@@ -169,21 +171,31 @@ function getDriverId(driverUl) {
 }
 
 let racersCount = 0;
-async function getRacingSkillForDrivers(driverIds) {
+async function getRacingSkillForDrivers(driverIds, onDriverFetched) {
     const driverIdsToFetch = driverIds.filter(driverId => !racingSkillCacheByDriverId.has(driverId));
 
-    for (const driverId of driverIdsToFetch) {
+   for (const driverId of driverIdsToFetch) {
         const json = await fetchRacingSkillForDrivers(driverId);
         racingSkillCacheByDriverId.set(+driverId,
             json && json.personalstats && json.personalstats.racingskill ? json.personalstats.racingskill : 'N/A'
         );
+
         if (json && json.error) {
             $('#racingupdatesnew').prepend(`<div style="color: red; font-size: 12px; line-height: 24px;">API error: ${JSON.stringify(json.error)}</div>`);
             break;
         }
-        racersCount++;
-        if (racersCount > 20) await sleep(1500);
-    }
+
+        if (onDriverFetched) {
+            try {
+                onDriverFetched(+driverId);
+            } catch (err) {
+                console.error('[Racing Enhancements PDA] onDriverFetched callback failed', err);
+            }
+        }
+
+    racersCount++;
+    if (racersCount > 20) await sleep(1500);
+}
 
     const resultHash = {};
     for (const driverId of driverIds) {
