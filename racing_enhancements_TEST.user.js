@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.1.0
+// @version      1.1.1
 
 // ==/UserScript==
 
@@ -58,6 +58,7 @@ function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 const racingSkillFetchInFlight = new Set();
 const racingSkillCacheByDriverId = new Map();
 let updating = false;
+let updateDriversListQueued = false;
 
 // ---- RS persistent cache helpers ----
 function loadPersistedRacingSkillCache() {
@@ -83,6 +84,17 @@ function persistRacingSkill(driverId, skill) {
 
 // Load cache immediately after defining helpers
 loadPersistedRacingSkillCache();
+
+
+function queueUpdateDriversList() {
+    if (updateDriversListQueued) return;
+    updateDriversListQueued = true;
+
+    requestAnimationFrame(() => {
+        updateDriversListQueued = false;
+        updateDriversList();
+    });
+}
 
 async function updateDriversList() {
     const driversList = document.getElementById('leaderBoard');
@@ -217,7 +229,7 @@ $('#updating').size() > 0 && $('#updating').remove();
 
 function watchForDriversListContentChanges(driversList) {
     if (driversList.dataset.hasWatcher !== undefined) return;
-    new MutationObserver(updateDriversList).observe(driversList, {childList: true});
+    new MutationObserver(queueUpdateDriversList).observe(driversList, {childList: true});
     driversList.dataset.hasWatcher = 'true';
 }
 
@@ -230,26 +242,31 @@ function getDriverId(driverUl) {
 
 let racersCount = 0;
 async function getRacingSkillForDrivers(driverIds, onDriverFetched) {
-    const driverIdsToFetch = driverIds.filter(driverId => !racingSkillCacheByDriverId.has(driverId));
+    const missingDriverIds = driverIds.filter(driverId =>
+        !racingSkillCacheByDriverId.has(driverId) &&
+        !racingSkillFetchInFlight.has(driverId)
+    );
 
    for (const driverId of driverIdsToFetch) {
         const json = await fetchRacingSkillForDrivers(driverId);
-        const fetchedSkill = json && json.personalstats && json.personalstats.racingskill
-            ? json.personalstats.racingskill
-            : 'N/A';
-
-        racingSkillCacheByDriverId.set(+driverId, fetchedSkill);
-
-        if (fetchedSkill !== 'N/A') {
-            persistRacingSkill(+driverId, fetchedSkill);
-}
 
         if (json && json.error) {
             $('#racingupdatesnew').prepend(`<div style="color: red; font-size: 12px; line-height: 24px;">API error: ${JSON.stringify(json.error)}</div>`);
+            racingSkillCacheByDriverId.delete(+driverId);
             racingSkillFetchInFlight.delete(+driverId);
             driverIdsToFetch.forEach(id => racingSkillFetchInFlight.delete(+id));
             break;
-}
+        }
+        
+        const fetchedSkill = json && json.personalstats && json.personalstats.racingskill
+            ? json.personalstats.racingskill
+            : 'N/A';
+        
+        racingSkillCacheByDriverId.set(+driverId, fetchedSkill);
+        
+        if (fetchedSkill !== 'N/A') {
+            persistRacingSkill(+driverId, fetchedSkill);
+        }
 
         if (onDriverFetched) {
             try {
@@ -901,7 +918,7 @@ function jqueryDependantInitializations() {
         if ((FETCH_RS || SHOW_SKINS) && $(location).attr('href').includes('sid=racing')) {
             $("#racingupdatesnew").ready(function() {
                 updateDriversList();
-                new MutationObserver(updateDriversList).observe(document.getElementById('racingAdditionalContainer'), {childList: true});
+                new MutationObserver(queueUpdateDriversList).observe(document.getElementById('racingAdditionalContainer'), {childList: true});
             });
         }
 
