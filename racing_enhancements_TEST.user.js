@@ -4,7 +4,7 @@
 // @updateURL    https://raw.githubusercontent.com/LtCabel/torn-userscripts/master/racing_enhancements_TEST.user.js
 // @downloadURL  https://raw.githubusercontent.com/LtCabel/torn-userscripts/master/racing_enhancements_TEST.user.js
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
-// @author       Lugburz, modified by Reshula & LtCabel
+// @author       Lugburz, modified by LtCabel and Reshula
 // @match        https://www.torn.com/loader.php?sid=racing*
 // @match        https://www.torn.com/page.php?sid=racing*
 // @connect      api.torn.com
@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.0.4
+// @version      1.0.5
 
 // ==/UserScript==
 
@@ -69,33 +69,41 @@ async function updateDriversList() {
     updating = true;
     $('#updating').size() < 1 && $('#racingupdatesnew').prepend('<div id="updating" style="color: green; font-size: 12px; line-height: 24px;">Updating drivers\' RS and skins...</div>');
 
-const racingSkills = FETCH_RS ? await getRacingSkillForDrivers(driverIds) : {};
-const racingSkins  = SHOW_SKINS ? await getRacingSkinOwners(driverIds)  : {};
+const racingSkins = SHOW_SKINS ? await getRacingSkinOwners(driverIds) : {};
 
 const driverNodes = driversList.querySelectorAll('.driver-item');
-for (const driver of driverNodes) {
+
+function paintDriverRow(driver) {
     const driverId = getDriverId(driver);
     const nameDiv = driver.querySelector('.name');
-    if (!nameDiv) continue;
+    if (!nameDiv) return;
 
-    if (FETCH_RS && racingSkills[driverId]) {
-        nameDiv.style.position = 'relative';
+    // RS: show immediately if already cached
+    if (FETCH_RS) {
+        const cachedSkill = racingSkillCacheByDriverId.get(driverId);
         let rsSpan = nameDiv.querySelector('.rs-display');
-        const rsText = `RS:${racingSkills[driverId]}`;
 
-        if (!rsSpan) {
-            rsSpan = document.createElement('span');
-            rsSpan.className = 'rs-display';
-            rsSpan.textContent = rsText;
-            nameDiv.appendChild(rsSpan);
-        } else if (rsSpan.textContent !== rsText) {
-            rsSpan.textContent = rsText;
+        if (cachedSkill) {
+            nameDiv.style.position = 'relative';
+            const rsText = `RS:${cachedSkill}`;
+
+            if (!rsSpan) {
+                rsSpan = document.createElement('span');
+                rsSpan.className = 'rs-display';
+                rsSpan.textContent = rsText;
+                nameDiv.appendChild(rsSpan);
+            } else if (rsSpan.textContent !== rsText) {
+                rsSpan.textContent = rsText;
+            }
+        } else if (rsSpan) {
+            rsSpan.remove();
         }
-    } else if (!FETCH_RS) {
+    } else {
         const rsSpan = nameDiv.querySelector('.rs-display');
         if (rsSpan) rsSpan.remove();
     }
 
+    // Skin
     if (SHOW_SKINS && racingSkins[driverId]) {
         const carImg = driver.querySelector('.car img');
         if (carImg) {
@@ -112,6 +120,37 @@ for (const driver of driverNodes) {
     }
 }
 
+// First pass: paint immediately using cache + skins
+for (const driver of driverNodes) {
+    paintDriverRow(driver);
+}
+
+if (FETCH_RS) {
+    const missingDriverIds = driverIds.filter(driverId => !racingSkillCacheByDriverId.has(driverId));
+
+    if (missingDriverIds.length) {
+        getRacingSkillForDrivers(missingDriverIds)
+            .then(() => {
+                const freshDriversList = document.getElementById('leaderBoard');
+                if (!freshDriversList) return;
+
+                const freshDriverNodes = freshDriversList.querySelectorAll('.driver-item');
+                for (const driver of freshDriverNodes) {
+                    paintDriverRow(driver);
+                }
+            })
+            .catch(err => {
+                console.error('[Racing Enhancements PDA] RS background fetch failed', err);
+            })
+            .finally(() => {
+                updating = false;
+                $('#updating').size() > 0 && $('#updating').remove();
+            });
+
+        return;
+    }
+}
+    
     updating = false;
     $('#updating').size() > 0 && $('#updating').remove();
 }
