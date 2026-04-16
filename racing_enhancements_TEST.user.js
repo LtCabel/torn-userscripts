@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.1.1
+// @version      1.1.2
 
 // ==/UserScript==
 
@@ -185,19 +185,18 @@ if (SHOW_SKINS) {
 }
 
 if (FETCH_RS) {
-    const missingDriverIds = driverIds.filter(driverId =>
+    const driverIdsToFetch = driverIds.filter(driverId =>
         !racingSkillCacheByDriverId.has(driverId) &&
         !racingSkillFetchInFlight.has(driverId)
     );
 
-    if (missingDriverIds.length) {
-        missingDriverIds.forEach(driverId => racingSkillFetchInFlight.add(driverId));
+    if (driverIdsToFetch.length) {
+        driverIdsToFetch.forEach(driverId => racingSkillFetchInFlight.add(driverId));
 
         // Allow future DOM refreshes to repaint cached values immediately
         updating = false;
 
-        getRacingSkillForDrivers(missingDriverIds, (fetchedDriverId) => {
-            
+        getRacingSkillForDrivers(driverIdsToFetch, (fetchedDriverId) => {
             const freshDriversList = document.getElementById('leaderBoard');
             if (!freshDriversList) return;
 
@@ -211,7 +210,7 @@ if (FETCH_RS) {
         })
             .catch(err => {
                 console.error('[Racing Enhancements PDA] RS background fetch failed', err);
-                missingDriverIds.forEach(driverId => racingSkillFetchInFlight.delete(driverId));
+                driverIdsToFetch.forEach(driverId => racingSkillFetchInFlight.delete(driverId));
             })
             .finally(() => {
                 if (racingSkillFetchInFlight.size === 0) {
@@ -242,12 +241,11 @@ function getDriverId(driverUl) {
 
 let racersCount = 0;
 async function getRacingSkillForDrivers(driverIds, onDriverFetched) {
-    const missingDriverIds = driverIds.filter(driverId =>
-        !racingSkillCacheByDriverId.has(driverId) &&
-        !racingSkillFetchInFlight.has(driverId)
+    const driverIdsToFetch = driverIds.filter(driverId =>
+        !racingSkillCacheByDriverId.has(driverId)
     );
 
-   for (const driverId of driverIdsToFetch) {
+    for (const driverId of driverIdsToFetch) {
         const json = await fetchRacingSkillForDrivers(driverId);
 
         if (json && json.error) {
