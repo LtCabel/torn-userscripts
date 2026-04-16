@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.0.6
+// @version      1.0.7
 
 // ==/UserScript==
 
@@ -69,8 +69,7 @@ async function updateDriversList() {
     updating = true;
     $('#updating').size() < 1 && $('#racingupdatesnew').prepend('<div id="updating" style="color: green; font-size: 12px; line-height: 24px;">Updating drivers\' RS and skins...</div>');
 
-const racingSkins = SHOW_SKINS ? await getRacingSkinOwners(driverIds) : {};
-
+let racingSkins = {};
 const driverNodes = driversList.querySelectorAll('.driver-item');
 
 function paintDriverRow(driver) {
@@ -123,6 +122,24 @@ function paintDriverRow(driver) {
 // First pass: paint immediately using cache + skins
 for (const driver of driverNodes) {
     paintDriverRow(driver);
+}
+
+if (SHOW_SKINS) {
+    getRacingSkinOwners(driverIds)
+        .then(skins => {
+            racingSkins = skins || {};
+
+            const freshDriversList = document.getElementById('leaderBoard');
+            if (!freshDriversList) return;
+
+            const freshDriverNodes = freshDriversList.querySelectorAll('.driver-item');
+            for (const driver of freshDriverNodes) {
+                paintDriverRow(driver);
+            }
+        })
+        .catch(err => {
+            console.error('[Racing Enhancements PDA] Skin fetch failed', err);
+        });
 }
 
 if (FETCH_RS) {
@@ -536,18 +553,21 @@ function showResults(results, start = 0) {
 
     let scrollSpan = nameLi.querySelector('.name-scroll');
     let rsBadge = nameLi.querySelector('.rs-display');
-
+    
     if (!scrollSpan) {
       scrollSpan = document.createElement('span');
       scrollSpan.className = 'name-scroll';
-
-      const existingRs = rsBadge ? rsBadge.cloneNode(true) : null;
-      nameLi.innerHTML = '';
-      nameLi.appendChild(scrollSpan);
-      if (existingRs) {
-        nameLi.appendChild(existingRs);
-        rsBadge = existingRs;
+    
+      // Move all non-RS children into name-scroll instead of wiping the node
+      const children = Array.from(nameLi.childNodes).filter(node => {
+        return !(node.nodeType === 1 && node.classList.contains('rs-display'));
+      });
+    
+      for (const child of children) {
+        scrollSpan.appendChild(child);
       }
+    
+      nameLi.insertBefore(scrollSpan, rsBadge || null);
     }
 
     if (scrollSpan.innerHTML !== textHtml) {
