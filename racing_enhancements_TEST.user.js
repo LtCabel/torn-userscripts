@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.0.7
+// @version      1.0.8
 
 // ==/UserScript==
 
@@ -52,12 +52,14 @@ function maybeClear() {
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
 // -------------------- Racing Skill cache --------------------
+const racingSkillFetchInFlight = new Set();
 const racingSkillCacheByDriverId = new Map();
 let updating = false;
 
 async function updateDriversList() {
     const driversList = document.getElementById('leaderBoard');
-    if (updating || driversList === null) return;
+    if (driversList === null) return;
+    if (updating) return;
 
     FETCH_RS = !!(GM_getValue('apiKey') && GM_getValue('apiKey').length > 0);
 
@@ -143,10 +145,19 @@ if (SHOW_SKINS) {
 }
 
 if (FETCH_RS) {
-    const missingDriverIds = driverIds.filter(driverId => !racingSkillCacheByDriverId.has(driverId));
+    const missingDriverIds = driverIds.filter(driverId =>
+        !racingSkillCacheByDriverId.has(driverId) &&
+        !racingSkillFetchInFlight.has(driverId)
+    );
 
     if (missingDriverIds.length) {
+        missingDriverIds.forEach(driverId => racingSkillFetchInFlight.add(driverId));
+
+        // Allow future DOM refreshes to repaint cached values immediately
+        updating = false;
+
         getRacingSkillForDrivers(missingDriverIds, (fetchedDriverId) => {
+            
             const freshDriversList = document.getElementById('leaderBoard');
             if (!freshDriversList) return;
 
@@ -160,18 +171,20 @@ if (FETCH_RS) {
         })
             .catch(err => {
                 console.error('[Racing Enhancements PDA] RS background fetch failed', err);
+                missingDriverIds.forEach(driverId => racingSkillFetchInFlight.delete(driverId));
             })
             .finally(() => {
-                updating = false;
-                $('#updating').size() > 0 && $('#updating').remove();
+                if (racingSkillFetchInFlight.size === 0) {
+                    $('#updating').size() > 0 && $('#updating').remove();
+                }
             });
 
         return;
     }
 }
-    
-    updating = false;
-    $('#updating').size() > 0 && $('#updating').remove();
+
+updating = false;
+$('#updating').size() > 0 && $('#updating').remove();
 }
 
 function watchForDriversListContentChanges(driversList) {
@@ -199,8 +212,10 @@ async function getRacingSkillForDrivers(driverIds, onDriverFetched) {
 
         if (json && json.error) {
             $('#racingupdatesnew').prepend(`<div style="color: red; font-size: 12px; line-height: 24px;">API error: ${JSON.stringify(json.error)}</div>`);
+            racingSkillFetchInFlight.delete(+driverId);
+            driverIdsToFetch.forEach(id => racingSkillFetchInFlight.delete(+id));
             break;
-        }
+}
 
         if (onDriverFetched) {
             try {
@@ -210,6 +225,8 @@ async function getRacingSkillForDrivers(driverIds, onDriverFetched) {
             }
         }
 
+    racingSkillFetchInFlight.delete(+driverId);
+    
     racersCount++;
     if (racersCount > 20) await sleep(1500);
 }
