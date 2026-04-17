@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.1.2
+// @version      1.1.3
 
 // ==/UserScript==
 
@@ -241,6 +241,8 @@ function getDriverId(driverUl) {
 
 let racersCount = 0;
 async function getRacingSkillForDrivers(driverIds, onDriverFetched) {
+    racersCount = 0;
+
     const driverIdsToFetch = driverIds.filter(driverId =>
         !racingSkillCacheByDriverId.has(driverId)
     );
