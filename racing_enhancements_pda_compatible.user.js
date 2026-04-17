@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      0.8.3
+// @version      2.0.0
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -16,6 +16,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
+
 // ==/UserScript==
 
 console.log("[Racing Enhancements PDA] starting");
@@ -38,6 +39,10 @@ const period = 1000;
 let   last_compl = -1.0;
 let   x = 0;
 let   penaltyNotif = 0;
+let   lastRenderedRaceKey = null;
+
+const RS_CACHE_KEY = 'racingSkillCachePersisted';
+const RS_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 // -------------------- Helpers --------------------
 function maybeClear() {
@@ -50,12 +55,51 @@ function maybeClear() {
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
 // -------------------- Racing Skill cache --------------------
+const racingSkillFetchInFlight = new Set();
 const racingSkillCacheByDriverId = new Map();
 let updating = false;
+let updateDriversListQueued = false;
+
+// ---- RS persistent cache helpers ----
+function loadPersistedRacingSkillCache() {
+    const persisted = GM_getValue(RS_CACHE_KEY, {});
+    const now = Date.now();
+
+    for (const [driverId, entry] of Object.entries(persisted)) {
+        if (!entry || typeof entry.skill === 'undefined' || typeof entry.ts !== 'number') continue;
+        if ((now - entry.ts) > RS_CACHE_MAX_AGE_MS) continue;
+
+        racingSkillCacheByDriverId.set(+driverId, entry.skill);
+    }
+}
+
+function persistRacingSkill(driverId, skill) {
+    const persisted = GM_getValue(RS_CACHE_KEY, {});
+    persisted[String(driverId)] = {
+        skill: skill,
+        ts: Date.now()
+    };
+    GM_setValue(RS_CACHE_KEY, persisted);
+}
+
+// Load cache immediately after defining helpers
+loadPersistedRacingSkillCache();
+
+
+function queueUpdateDriversList() {
+    if (updateDriversListQueued) return;
+    updateDriversListQueued = true;
+
+    requestAnimationFrame(() => {
+        updateDriversListQueued = false;
+        updateDriversList();
+    });
+}
 
 async function updateDriversList() {
     const driversList = document.getElementById('leaderBoard');
-    if (updating || driversList === null) return;
+    if (driversList === null) return;
+    if (updating) return;
 
     FETCH_RS = !!(GM_getValue('apiKey') && GM_getValue('apiKey').length > 0);
 
@@ -67,44 +111,124 @@ async function updateDriversList() {
     updating = true;
     $('#updating').size() < 1 && $('#racingupdatesnew').prepend('<div id="updating" style="color: green; font-size: 12px; line-height: 24px;">Updating drivers\' RS and skins...</div>');
 
-    const racingSkills = FETCH_RS ? await getRacingSkillForDrivers(driverIds) : {};
-    const racingSkins  = SHOW_SKINS ? await getRacingSkinOwners(driverIds)  : {};
-    for (let driver of driversList.querySelectorAll('.driver-item')) {
-        const driverId = getDriverId(driver);
+let racingSkins = {};
+const driverNodes = driversList.querySelectorAll('.driver-item');
 
-        // RS badge
-        if (FETCH_RS && !!racingSkills[driverId]) {
-            const skill   = racingSkills[driverId];
-            const nameDiv = driver.querySelector('.name');
+function paintDriverRow(driver) {
+    const driverId = getDriverId(driver);
+    const nameDiv = driver.querySelector('.name');
+    if (!nameDiv) return;
+
+    // RS: show immediately if already cached
+    if (FETCH_RS) {
+        const cachedSkill = racingSkillCacheByDriverId.get(driverId);
+        let rsSpan = nameDiv.querySelector('.rs-display');
+
+        if (cachedSkill) {
             nameDiv.style.position = 'relative';
-            if (!driver.querySelector('.rs-display')) {
-                nameDiv.insertAdjacentHTML('beforeend', `<span class="rs-display">RS:${skill}</span>`);
-            }
-        } else if (!FETCH_RS) {
-            const rsSpan = driver.querySelector('.rs-display');
-            if (!!rsSpan) rsSpan.remove();
-        }
+            const rsText = `RS:${cachedSkill}`;
 
-        // Skin
-        if (SHOW_SKINS && !!racingSkins[driverId]) {
-            const carImg = driver.querySelector('.car')?.querySelector('img');
-            if (carImg) {
-                const carId = carImg.getAttribute('src').replace(/[^0-9]*/g, '');
-                if (!!racingSkins[driverId][carId]) {
-                    carImg.setAttribute('src', SKIN_IMAGE(racingSkins[driverId][carId]));
-                    if (driverId == userID) skinCarSidebar(racingSkins[driverId][carId]);
+            if (!rsSpan) {
+                rsSpan = document.createElement('span');
+                rsSpan.className = 'rs-display';
+                rsSpan.textContent = rsText;
+                nameDiv.appendChild(rsSpan);
+            } else if (rsSpan.textContent !== rsText) {
+                rsSpan.textContent = rsText;
+            }
+        } else if (rsSpan) {
+            rsSpan.remove();
+        }
+    } else {
+        const rsSpan = nameDiv.querySelector('.rs-display');
+        if (rsSpan) rsSpan.remove();
+    }
+
+    // Skin
+    if (SHOW_SKINS && racingSkins[driverId]) {
+        const carImg = driver.querySelector('.car img');
+        if (carImg) {
+            const carId = carImg.getAttribute('src').replace(/[^0-9]*/g, '');
+            const skinId = racingSkins[driverId][carId];
+            if (skinId) {
+                const skinSrc = SKIN_IMAGE(skinId);
+                if (carImg.getAttribute('src') !== skinSrc) {
+                    carImg.setAttribute('src', skinSrc);
                 }
+                if (driverId == userID) skinCarSidebar(skinId);
             }
         }
     }
+}
 
-    updating = false;
-    $('#updating').size() > 0 && $('#updating').remove();
+// First pass: paint immediately using cache + skins
+for (const driver of driverNodes) {
+    paintDriverRow(driver);
+}
+
+if (SHOW_SKINS) {
+    getRacingSkinOwners(driverIds)
+        .then(skins => {
+            racingSkins = skins || {};
+
+            const freshDriversList = document.getElementById('leaderBoard');
+            if (!freshDriversList) return;
+
+            const freshDriverNodes = freshDriversList.querySelectorAll('.driver-item');
+            for (const driver of freshDriverNodes) {
+                paintDriverRow(driver);
+            }
+        })
+        .catch(err => {
+            console.error('[Racing Enhancements PDA] Skin fetch failed', err);
+        });
+}
+
+if (FETCH_RS) {
+    const driverIdsToFetch = driverIds.filter(driverId =>
+        !racingSkillCacheByDriverId.has(driverId) &&
+        !racingSkillFetchInFlight.has(driverId)
+    );
+
+    if (driverIdsToFetch.length) {
+        driverIdsToFetch.forEach(driverId => racingSkillFetchInFlight.add(driverId));
+
+        // Allow future DOM refreshes to repaint cached values immediately
+        updating = false;
+
+        getRacingSkillForDrivers(driverIdsToFetch, (fetchedDriverId) => {
+            const freshDriversList = document.getElementById('leaderBoard');
+            if (!freshDriversList) return;
+
+            const freshDriverNodes = freshDriversList.querySelectorAll('.driver-item');
+            for (const driver of freshDriverNodes) {
+                if (getDriverId(driver) === fetchedDriverId) {
+                    paintDriverRow(driver);
+                    break;
+                }
+            }
+        })
+            .catch(err => {
+                console.error('[Racing Enhancements PDA] RS background fetch failed', err);
+                driverIdsToFetch.forEach(driverId => racingSkillFetchInFlight.delete(driverId));
+            })
+            .finally(() => {
+                if (racingSkillFetchInFlight.size === 0) {
+                    $('#updating').size() > 0 && $('#updating').remove();
+                }
+            });
+
+        return;
+    }
+}
+
+updating = false;
+$('#updating').size() > 0 && $('#updating').remove();
 }
 
 function watchForDriversListContentChanges(driversList) {
     if (driversList.dataset.hasWatcher !== undefined) return;
-    new MutationObserver(updateDriversList).observe(driversList, {childList: true});
+    new MutationObserver(queueUpdateDriversList).observe(driversList, {childList: true});
     driversList.dataset.hasWatcher = 'true';
 }
 
@@ -116,21 +240,47 @@ function getDriverId(driverUl) {
 }
 
 let racersCount = 0;
-async function getRacingSkillForDrivers(driverIds) {
-    const driverIdsToFetch = driverIds.filter(driverId => !racingSkillCacheByDriverId.has(driverId));
+async function getRacingSkillForDrivers(driverIds, onDriverFetched) {
+    racersCount = 0;
+
+    const driverIdsToFetch = driverIds.filter(driverId =>
+        !racingSkillCacheByDriverId.has(driverId)
+    );
 
     for (const driverId of driverIdsToFetch) {
         const json = await fetchRacingSkillForDrivers(driverId);
-        racingSkillCacheByDriverId.set(+driverId,
-            json && json.personalstats && json.personalstats.racingskill ? json.personalstats.racingskill : 'N/A'
-        );
+
         if (json && json.error) {
             $('#racingupdatesnew').prepend(`<div style="color: red; font-size: 12px; line-height: 24px;">API error: ${JSON.stringify(json.error)}</div>`);
+            racingSkillCacheByDriverId.delete(+driverId);
+            racingSkillFetchInFlight.delete(+driverId);
+            driverIdsToFetch.forEach(id => racingSkillFetchInFlight.delete(+id));
             break;
         }
-        racersCount++;
-        if (racersCount > 20) await sleep(1500);
-    }
+        
+        const fetchedSkill = json && json.personalstats && json.personalstats.racingskill
+            ? json.personalstats.racingskill
+            : 'N/A';
+        
+        racingSkillCacheByDriverId.set(+driverId, fetchedSkill);
+        
+        if (fetchedSkill !== 'N/A') {
+            persistRacingSkill(+driverId, fetchedSkill);
+        }
+
+        if (onDriverFetched) {
+            try {
+                onDriverFetched(+driverId);
+            } catch (err) {
+                console.error('[Racing Enhancements PDA] onDriverFetched callback failed', err);
+            }
+        }
+
+    racingSkillFetchInFlight.delete(+driverId);
+    
+    racersCount++;
+    if (racersCount > 20) await sleep(1500);
+}
 
     const resultHash = {};
     for (const driverId of driverIds) {
@@ -375,12 +525,18 @@ function parseRacingData(data) {
     // race link
     if ($('#raceLink').size() < 1) {
         RACE_ID = data.raceID;
-        const raceLink = `<a id="raceLink" href="https://www.torn.com/loader.php?sid=racing&tab=log&raceID=${RACE_ID}" style="float: right; margin-left: 12px;">Link to the race</a>`;
+        const raceLink = `<a id="raceLink" href="https://www.torn.com/page.php?sid=racing&tab=log&raceID=${RACE_ID}" style="float: right; margin-left: 12px;">Link to the race</a>`;
         $(raceLink).insertAfter('#racingEnhSettings');
     }
 
     // results when race finished
     if (data.timeData.status >= 3) {
+        const raceKey = `${data.raceID}:${data.timeData.status}:${data.timeData.timeEnded}`;
+        const resultsAlreadyInDom = !!document.querySelector('#leaderBoard .name-scroll');
+
+        if (lastRenderedRaceKey === raceKey && resultsAlreadyInDom) return;
+        lastRenderedRaceKey = raceKey;
+    
         const carsData       = data.raceData.cars;
         const carInfo        = data.raceData.carInfo;
         const trackIntervals = data.raceData.trackData.intervals.length;
@@ -425,49 +581,68 @@ function compare(a, b) {
 }
 
 function showResults(results, start = 0) {
-  // Map leaderboard rows by numeric userId
+  const board = document.getElementById('leaderBoard');
+  if (!board) return;
+
+  // Build row map once
   const rowByUserId = {};
-  $('#leaderBoard > li').each(function () {
-    const idAttr = this.id || '';
-    const m = idAttr.match(/(\d+)/);
+  board.querySelectorAll(':scope > li').forEach(row => {
+    const m = (row.id || '').match(/(\d+)/);
     if (!m) return;
-    rowByUserId[+m[1]] = $(this).find('li.name');
+    const nameLi = row.querySelector('li.name');
+    if (nameLi) rowByUserId[+m[1]] = nameLi;
   });
 
   for (let i = 0; i < results.length; i++) {
     const userId = +results[i][1];
     const nameLi = rowByUserId[userId];
-    if (!nameLi || nameLi.length === 0) continue;
+    if (!nameLi) continue;
 
     const name = results[i][0];
     const p = i + start + 1;
-    const position = p === 1 ? 'gold' : (p === 2 ? 'silver' : (p === 3 ? 'bronze' : ''));
+    const position = p === 1 ? 'gold' : p === 2 ? 'silver' : p === 3 ? 'bronze' : '';
     const place = (p != 11 && p % 10 == 1) ? p + 'st'
                 : (p != 12 && p % 10 == 2) ? p + 'nd'
-                : (p != 13 && p % 10 == 3) ? p + 'rd' : p + 'th';
+                : (p != 13 && p % 10 == 3) ? p + 'rd'
+                : p + 'th';
 
-    const result  = (typeof results[i][2] === 'number') ? formatTimeMsec(results[i][2] * 1000) : results[i][2];
-    const bestLap = results[i][3] ? ` (best: ${formatTimeMsec(results[i][3] * 1000)})` : '';
+    const result = (typeof results[i][2] === 'number')
+      ? formatTimeMsec(results[i][2] * 1000)
+      : results[i][2];
+    const bestLap = results[i][3]
+      ? ` (best: ${formatTimeMsec(results[i][3] * 1000)})`
+      : '';
 
-    // Detach RS so it doesn't end up inside the scroller
-    const $rs = nameLi.find('.rs-display').detach();
-    const rsBadge = $rs.length ? $rs[0].outerHTML : '';
+    const iconHtml = (SHOW_POSITION_ICONS && position)
+      ? `<i class="race_position ${position}"></i>`
+      : '';
 
-    const iconHtml = (SHOW_POSITION_ICONS && position) ? `<i class="race_position ${position}"></i>` : '';
     const textHtml = `${iconHtml}<span class="race-name">${name}</span> <span class="race-place">${place}</span> ${result}${bestLap}`;
 
-    // Ensure scroll wrapper exists exactly once
-    if (!nameLi.find('.name-scroll').length) {
-      nameLi.wrapInner('<span class="name-scroll"></span>');
+    let scrollSpan = nameLi.querySelector('.name-scroll');
+    let rsBadge = nameLi.querySelector('.rs-display');
+    
+    if (!scrollSpan) {
+      scrollSpan = document.createElement('span');
+      scrollSpan.className = 'name-scroll';
+    
+      // Move all non-RS children into name-scroll instead of wiping the node
+      const children = Array.from(nameLi.childNodes).filter(node => {
+        return !(node.nodeType === 1 && node.classList.contains('rs-display'));
+      });
+    
+      for (const child of children) {
+        scrollSpan.appendChild(child);
+      }
+    
+      nameLi.insertBefore(scrollSpan, rsBadge || null);
     }
-    nameLi.find('.name-scroll').html(textHtml);
 
-    // Re-append RS badge (outside the scrolling span)
-    if (rsBadge) nameLi.append(rsBadge);
+    if (scrollSpan.innerHTML !== textHtml) {
+      scrollSpan.innerHTML = textHtml;
+    }
   }
 }
-
-
 
 
 
@@ -508,14 +683,14 @@ function addSettingsDiv() {
 
 function addExportButton(results, crashes, my_name, race_id, time_ended) {
     if ($("#racingupdatesnew").size() > 0 && $('#downloadAsCsv').size() < 1 && $('#copyCsvBtn').size() < 1) {
-        let csv = 'position,name,id,time,best_lap,rs\n';
+        let csv = 'position,name,id,time,best_lap\n';
         for (let i = 0; i < results.length; i++) {
             const timeStr = formatTimeMsec(results[i][2] * 1000, true);
             const bestLap = formatTimeMsec(results[i][3] * 1000);
-            csv += [i+1, results[i][0], results[i][1], timeStr, bestLap, (results[i][0] === my_name ? GM_getValue('racinglevel') : '')].join(',') + '\n';
+            csv += [i+1, results[i][0], results[i][1], timeStr, bestLap].join(',') + '\n';
         }
         for (let i = 0; i < crashes.length; i++) {
-            csv += [results.length + i + 1, crashes[i][0], crashes[i][1], crashes[i][2], '', (crashes[i][0] === my_name ? GM_getValue('racinglevel') : '')].join(',') + '\n';
+            csv += [results.length + i + 1, crashes[i][0], crashes[i][1], crashes[i][2], ''].join(',') + '\n';
         }
 
         const timeE = new Date(); timeE.setTime(time_ended * 1000);
@@ -691,10 +866,17 @@ ajax((page, xhr) => {
     }
 
     try {
-        parseRacingData(JSON.parse(xhr.responseText));
+        const parsed = JSON.parse(xhr.responseText);
+        requestAnimationFrame(() => {
+            try {
+                parseRacingData(parsed);
+            } catch (e) {
+                console.debug('[Racing Enhancements PDA] Could not parse racing data', e);
+            }
+    });
     } catch (e) {
         console.debug('[Racing Enhancements PDA] Could not parse racing data', e);
-    }
+}
 
     // Highlight JLT custom events
     const JltColor = '#fff200';
@@ -736,7 +918,7 @@ function jqueryDependantInitializations() {
         if ((FETCH_RS || SHOW_SKINS) && $(location).attr('href').includes('sid=racing')) {
             $("#racingupdatesnew").ready(function() {
                 updateDriversList();
-                new MutationObserver(updateDriversList).observe(document.getElementById('racingAdditionalContainer'), {childList: true});
+                new MutationObserver(queueUpdateDriversList).observe(document.getElementById('racingAdditionalContainer'), {childList: true});
             });
         }
 
