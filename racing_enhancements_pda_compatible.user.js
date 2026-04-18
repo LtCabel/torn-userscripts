@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      2.0.0
+// @version      2.0.1
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -59,6 +59,7 @@ const racingSkillFetchInFlight = new Set();
 const racingSkillCacheByDriverId = new Map();
 let updating = false;
 let updateDriversListQueued = false;
+let rsFetchInProgress = false;
 
 // ---- RS persistent cache helpers ----
 function loadPersistedRacingSkillCache() {
@@ -184,18 +185,19 @@ if (SHOW_SKINS) {
         });
 }
 
-if (FETCH_RS) {
+if (FETCH_RS && !rsFetchInProgress) {
     const driverIdsToFetch = driverIds.filter(driverId =>
         !racingSkillCacheByDriverId.has(driverId) &&
         !racingSkillFetchInFlight.has(driverId)
     );
 
     if (driverIdsToFetch.length) {
+        rsFetchInProgress = true;
         driverIdsToFetch.forEach(driverId => racingSkillFetchInFlight.add(driverId));
-
+    
         // Allow future DOM refreshes to repaint cached values immediately
         updating = false;
-
+    
         getRacingSkillForDrivers(driverIdsToFetch, (fetchedDriverId) => {
             const freshDriversList = document.getElementById('leaderBoard');
             if (!freshDriversList) return;
@@ -213,6 +215,7 @@ if (FETCH_RS) {
                 driverIdsToFetch.forEach(driverId => racingSkillFetchInFlight.delete(driverId));
             })
             .finally(() => {
+                rsFetchInProgress = false;
                 if (racingSkillFetchInFlight.size === 0) {
                     $('#updating').size() > 0 && $('#updating').remove();
                 }
