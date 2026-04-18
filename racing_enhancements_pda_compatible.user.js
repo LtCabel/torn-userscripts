@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      2.0.1
+// @version      2.0.2
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -280,9 +280,9 @@ async function getRacingSkillForDrivers(driverIds, onDriverFetched) {
         }
 
     racingSkillFetchInFlight.delete(+driverId);
+
     
-    racersCount++;
-    if (racersCount > 20) await sleep(1500);
+    await sleep(1300);
 }
 
     const resultHash = {};
