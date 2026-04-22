@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.2.2
+// @version      2.0.2.3
 
 // ==/UserScript==
 
@@ -574,6 +574,12 @@ function checkPenalty() {
 
 function updateSkill(level) {
     debugLog('updateSkill: ' + level);
+    const skillNodes = $('#racingMainContainer').find('div.skill');
+    debugLog('skill nodes found: ' + skillNodes.length);
+    
+    skillNodes.each(function(i) {
+        debugLog('skill node ' + i + ': "' + $(this).text().trim() + '"');
+    });
     const skill = Number(level).toFixed(5);
     const prev  = GM_getValue('racinglevel');
 
@@ -603,10 +609,18 @@ function updateSkill(level) {
         } else {
             $('#racingMainContainer').find('div.skill').text(skill);
         }
+        setTimeout(() => {
+            const skillNodesAfter = $('#racingMainContainer').find('div.skill');
+            skillNodesAfter.each(function(i) {
+                debugLog('AFTER update skill node ' + i + ': "' + $(this).text().trim() + '"');
+            });
+        }, 500);
 
         const lastInc = GM_getValue('lastRSincrement');
-        if (lastInc) $('div.skill').append(`<div style="margin-top: 10px;">Last gain: ${lastInc}</div>`);
-    }
+        if (lastInc) {
+            $('div.skill').find('.last-gain').remove();
+            $('div.skill').append(`<div class="last-gain" style="margin-top: 10px;">Last gain: ${lastInc}</div>`);
+        }
 }
 
 function updatePoints(pointsearned) {
