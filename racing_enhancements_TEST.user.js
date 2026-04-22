@@ -58,37 +58,6 @@ function maybeClear() {
 }
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-function debugLog(msg) {
-    let box = document.getElementById('racing-debug-box');
-
-    if (!box) {
-        box = document.createElement('div');
-        box.id = 'racing-debug-box';
-        box.style.position = 'fixed';
-        box.style.bottom = '10px';
-        box.style.left = '10px';
-        box.style.right = '10px';
-        box.style.maxHeight = '200px';
-        box.style.overflowY = 'auto';
-        box.style.background = 'rgba(0,0,0,0.85)';
-        box.style.color = '#00ff00';
-        box.style.fontSize = '10px';
-        box.style.zIndex = '999999';
-        box.style.padding = '6px';
-        box.style.borderRadius = '6px';
-        box.style.fontFamily = 'monospace';
-        document.body.appendChild(box);
-    }
-
-    const line = document.createElement('div');
-    line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    box.appendChild(line);
-
-    // keep it from growing forever
-    if (box.childNodes.length > 50) {
-        box.removeChild(box.firstChild);
-    }
-}
 
 // -------------------- Racing Skill cache --------------------
 const racingSkillFetchInFlight = new Set();
@@ -573,13 +542,6 @@ function checkPenalty() {
 }
 
 function updateSkill(level) {
-    debugLog('updateSkill: ' + level);
-    const skillNodes = $('#racingMainContainer').find('div.skill');
-    debugLog('skill nodes found: ' + skillNodes.length);
-    
-    skillNodes.each(function(i) {
-        debugLog('skill node ' + i + ': "' + $(this).text().trim() + '"');
-    });
     const skill = Number(level).toFixed(5);
     const prev  = GM_getValue('racinglevel');
 
@@ -602,27 +564,14 @@ function updateSkill(level) {
     }
     GM_setValue('racinglevel', level);
 
-    function applyPreciseSkill(skill) {
-        const nodes = $('#racingMainContainer').find('div.skill');
-        nodes.text(skill);
-    }
-    
     if ($('#racingMainContainer').find('div.skill').size() > 0) {
-    
-        // Apply multiple times to beat Torn redraw
-        applyPreciseSkill(skill);
-        setTimeout(() => applyPreciseSkill(skill), 100);
-        setTimeout(() => applyPreciseSkill(skill), 400);
-        setTimeout(() => applyPreciseSkill(skill), 1000);
-    
-        // Debug after update
-        setTimeout(() => {
-            const skillNodesAfter = $('#racingMainContainer').find('div.skill');
-            skillNodesAfter.each(function(i) {
-                debugLog('AFTER update skill node ' + i + ': "' + $(this).text().trim() + '"');
-            });
-        }, 500);
-    
+        if ($("#sidebarroot").find("a[class^='menu-value']").size() > 0) {
+            $('#racingMainContainer').find('div.skill-desc').css('left', '5px');
+            $('#racingMainContainer').find('div.skill').css('left', '5px').text(skill);
+        } else {
+            $('#racingMainContainer').find('div.skill').text(skill);
+        }
+
         const lastInc = GM_getValue('lastRSincrement');
         if (lastInc) {
             $('div.skill').find('.last-gain').remove();
@@ -649,7 +598,6 @@ function updatePoints(pointsearned) {
 
 // -------------------- Results --------------------
 function parseRacingData(data) {
-    debugLog('parseRacingData called');
     // no sidebar in phone mode
     const my_name = $("#sidebarroot").find("a[class^='menu-value']").html() || data.user.playername;
 
@@ -663,12 +611,12 @@ function parseRacingData(data) {
     // race link
     RACE_ID = data.raceID;
 
-if ($('#raceLink').size() < 1) {
-    const raceLink = `<a id="raceLink" href="https://www.torn.com/page.php?sid=racing&tab=log&raceID=${RACE_ID}" style="float: right; margin-left: 12px;">Link to the race</a>`;
-    $(raceLink).insertAfter('#racingEnhSettings');
-} else {
-    $('#raceLink').attr('href', `https://www.torn.com/page.php?sid=racing&tab=log&raceID=${RACE_ID}`);
-}
+    if ($('#raceLink').size() < 1) {
+        const raceLink = `<a id="raceLink" href="https://www.torn.com/page.php?sid=racing&tab=log&raceID=${RACE_ID}" style="float: right; margin-left: 12px;">Link to the race</a>`;
+        $(raceLink).insertAfter('#racingEnhSettings');
+    } else {
+        $('#raceLink').attr('href', `https://www.torn.com/page.php?sid=racing&tab=log&raceID=${RACE_ID}`);
+    }
 
     // results when race finished
     if (data.timeData.status >= 3) {
@@ -709,7 +657,6 @@ if ($('#raceLink').size() < 1) {
         addExportButton(results, crashes, my_name, data.raceID, data.timeData.timeEnded);
 
         if (SHOW_RESULTS) {
-            debugLog('rendering results: ' + results.length + ' finishers');
             showResults(results);
             showResults(crashes, results.length);
             queueUpdateDriversList();
@@ -1001,8 +948,6 @@ function showCsvModal(csvText, fileName) {
 ajax((page, xhr) => {
     if (page != "loader" && page != "page") return;
 
-    debugLog('ajaxComplete: ' + page);
-
     if ($(location).attr('href').includes('sid=racing')) {
         ensureRacingPageObserver();
         ensureLeaderboardWatcher();
@@ -1018,15 +963,9 @@ ajax((page, xhr) => {
 
     try {
         const parsed = JSON.parse(xhr.responseText);
-        debugLog('parsed keys: ' + Object.keys(parsed || {}).join(','));
+       
         requestAnimationFrame(() => {
             try {
-                if (parsed && parsed.user && parsed.timeData) {
-                    debugLog('valid racing payload detected');
-                } else {
-                    debugLog('NOT racing payload');
-                }
-        
                 parseRacingData(parsed);
             } catch (e) {
                 console.debug('[Racing Enhancements PDA] Could not parse racing data', e);
