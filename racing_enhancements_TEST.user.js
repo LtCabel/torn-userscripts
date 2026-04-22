@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.2.3
+// @version      2.0.2.4
 
 // ==/UserScript==
 
@@ -621,6 +621,7 @@ function updateSkill(level) {
             $('div.skill').find('.last-gain').remove();
             $('div.skill').append(`<div class="last-gain" style="margin-top: 10px;">Last gain: ${lastInc}</div>`);
         }
+    }
 }
 
 function updatePoints(pointsearned) {
