@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.2.4
+// @version      2.0.2.5
 
 // ==/UserScript==
 
@@ -602,20 +602,27 @@ function updateSkill(level) {
     }
     GM_setValue('racinglevel', level);
 
+    function applyPreciseSkill(skill) {
+        const nodes = $('#racingMainContainer').find('div.skill');
+        nodes.text(skill);
+    }
+    
     if ($('#racingMainContainer').find('div.skill').size() > 0) {
-        if ($("#sidebarroot").find("a[class^='menu-value']").size() > 0) {
-            $('#racingMainContainer').find('div.skill-desc').css('left', '5px');
-            $('#racingMainContainer').find('div.skill').css('left', '5px').text(skill);
-        } else {
-            $('#racingMainContainer').find('div.skill').text(skill);
-        }
+    
+        // Apply multiple times to beat Torn redraw
+        applyPreciseSkill(skill);
+        setTimeout(() => applyPreciseSkill(skill), 100);
+        setTimeout(() => applyPreciseSkill(skill), 400);
+        setTimeout(() => applyPreciseSkill(skill), 1000);
+    
+        // Debug after update
         setTimeout(() => {
             const skillNodesAfter = $('#racingMainContainer').find('div.skill');
             skillNodesAfter.each(function(i) {
                 debugLog('AFTER update skill node ' + i + ': "' + $(this).text().trim() + '"');
             });
         }, 500);
-
+    
         const lastInc = GM_getValue('lastRSincrement');
         if (lastInc) {
             $('div.skill').find('.last-gain').remove();
