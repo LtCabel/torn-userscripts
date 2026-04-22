@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.2.1
+// @version      2.0.2.2
 
 // ==/UserScript==
 
@@ -57,6 +57,38 @@ function maybeClear() {
     }
 }
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+function debugLog(msg) {
+    let box = document.getElementById('racing-debug-box');
+
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'racing-debug-box';
+        box.style.position = 'fixed';
+        box.style.bottom = '10px';
+        box.style.left = '10px';
+        box.style.right = '10px';
+        box.style.maxHeight = '200px';
+        box.style.overflowY = 'auto';
+        box.style.background = 'rgba(0,0,0,0.85)';
+        box.style.color = '#00ff00';
+        box.style.fontSize = '10px';
+        box.style.zIndex = '999999';
+        box.style.padding = '6px';
+        box.style.borderRadius = '6px';
+        box.style.fontFamily = 'monospace';
+        document.body.appendChild(box);
+    }
+
+    const line = document.createElement('div');
+    line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    box.appendChild(line);
+
+    // keep it from growing forever
+    if (box.childNodes.length > 50) {
+        box.removeChild(box.firstChild);
+    }
+}
 
 // -------------------- Racing Skill cache --------------------
 const racingSkillFetchInFlight = new Set();
@@ -541,6 +573,7 @@ function checkPenalty() {
 }
 
 function updateSkill(level) {
+    debugLog('updateSkill: ' + level);
     const skill = Number(level).toFixed(5);
     const prev  = GM_getValue('racinglevel');
 
@@ -594,6 +627,7 @@ function updatePoints(pointsearned) {
 
 // -------------------- Results --------------------
 function parseRacingData(data) {
+    debugLog('parseRacingData called');
     // no sidebar in phone mode
     const my_name = $("#sidebarroot").find("a[class^='menu-value']").html() || data.user.playername;
 
@@ -653,6 +687,7 @@ if ($('#raceLink').size() < 1) {
         addExportButton(results, crashes, my_name, data.raceID, data.timeData.timeEnded);
 
         if (SHOW_RESULTS) {
+            debugLog('rendering results: ' + results.length + ' finishers');
             showResults(results);
             showResults(crashes, results.length);
             queueUpdateDriversList();
@@ -944,6 +979,8 @@ function showCsvModal(csvText, fileName) {
 ajax((page, xhr) => {
     if (page != "loader" && page != "page") return;
 
+    debugLog('ajaxComplete: ' + page);
+
     if ($(location).attr('href').includes('sid=racing')) {
         ensureRacingPageObserver();
         ensureLeaderboardWatcher();
@@ -959,8 +996,15 @@ ajax((page, xhr) => {
 
     try {
         const parsed = JSON.parse(xhr.responseText);
+        debugLog('parsed keys: ' + Object.keys(parsed || {}).join(','));
         requestAnimationFrame(() => {
             try {
+                if (parsed && parsed.user && parsed.timeData) {
+                    debugLog('valid racing payload detected');
+                } else {
+                    debugLog('NOT racing payload');
+                }
+        
                 parseRacingData(parsed);
             } catch (e) {
                 console.debug('[Racing Enhancements PDA] Could not parse racing data', e);
