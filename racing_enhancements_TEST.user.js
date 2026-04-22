@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.1.3
+// @version      2.0.2.1
 
 // ==/UserScript==
 
@@ -40,6 +40,10 @@ let   last_compl = -1.0;
 let   x = 0;
 let   penaltyNotif = 0;
 let   lastRenderedRaceKey = null;
+let   racingPageObserver = null;
+let   observedLeaderboard = null;
+let   lastSeenLeaderboardSignature = '';
+let   lastSeenPageHref = location.href;
 
 const RS_CACHE_KEY = 'racingSkillCachePersisted';
 const RS_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -59,6 +63,7 @@ const racingSkillFetchInFlight = new Set();
 const racingSkillCacheByDriverId = new Map();
 let updating = false;
 let updateDriversListQueued = false;
+let rsFetchInProgress = false;
 
 // ---- RS persistent cache helpers ----
 function loadPersistedRacingSkillCache() {
@@ -96,9 +101,72 @@ function queueUpdateDriversList() {
     });
 }
 
+function getLeaderboardSignature(driversList) {
+    if (!driversList) return '';
+    return Array.from(driversList.querySelectorAll('.driver-item'))
+        .map(driver => getDriverId(driver))
+        .join(',');
+}
+
+function resetRaceUiState() {
+    lastRenderedRaceKey = null;
+    observedLeaderboard = null;
+    lastSeenLeaderboardSignature = '';
+    _skinned = false;
+    updating = false;
+
+    const updatingNode = document.getElementById('updating');
+    if (updatingNode) updatingNode.remove();
+
+    const raceLink = document.getElementById('raceLink');
+    if (raceLink) raceLink.remove();
+}
+
+function ensureLeaderboardWatcher() {
+    const driversList = document.getElementById('leaderBoard');
+    if (!driversList) return;
+
+    if (observedLeaderboard !== driversList) {
+        observedLeaderboard = driversList;
+        watchForDriversListContentChanges(driversList);
+        lastSeenLeaderboardSignature = '';
+    }
+
+    const signature = getLeaderboardSignature(driversList);
+    if (signature && signature !== lastSeenLeaderboardSignature) {
+        lastSeenLeaderboardSignature = signature;
+        queueUpdateDriversList();
+    }
+}
+
+function ensureRacingPageObserver() {
+    if (racingPageObserver) return;
+
+    racingPageObserver = new MutationObserver(() => {
+        if (!location.href.includes('sid=racing')) return;
+
+        if (location.href !== lastSeenPageHref) {
+            lastSeenPageHref = location.href;
+            resetRaceUiState();
+        }
+
+        ensureLeaderboardWatcher();
+    });
+
+    racingPageObserver.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+}
+
+
 async function updateDriversList() {
     const driversList = document.getElementById('leaderBoard');
-    if (driversList === null) return;
+    if (driversList === null) {
+        observedLeaderboard = null;
+        lastSeenLeaderboardSignature = '';
+        return;
+    }
     if (updating) return;
 
     FETCH_RS = !!(GM_getValue('apiKey') && GM_getValue('apiKey').length > 0);
@@ -184,18 +252,19 @@ if (SHOW_SKINS) {
         });
 }
 
-if (FETCH_RS) {
+if (FETCH_RS && !rsFetchInProgress) {
     const driverIdsToFetch = driverIds.filter(driverId =>
         !racingSkillCacheByDriverId.has(driverId) &&
         !racingSkillFetchInFlight.has(driverId)
     );
 
     if (driverIdsToFetch.length) {
+        rsFetchInProgress = true;
         driverIdsToFetch.forEach(driverId => racingSkillFetchInFlight.add(driverId));
-
+    
         // Allow future DOM refreshes to repaint cached values immediately
         updating = false;
-
+    
         getRacingSkillForDrivers(driverIdsToFetch, (fetchedDriverId) => {
             const freshDriversList = document.getElementById('leaderBoard');
             if (!freshDriversList) return;
@@ -213,6 +282,7 @@ if (FETCH_RS) {
                 driverIdsToFetch.forEach(driverId => racingSkillFetchInFlight.delete(driverId));
             })
             .finally(() => {
+                rsFetchInProgress = false;
                 if (racingSkillFetchInFlight.size === 0) {
                     $('#updating').size() > 0 && $('#updating').remove();
                 }
@@ -227,8 +297,20 @@ $('#updating').size() > 0 && $('#updating').remove();
 }
 
 function watchForDriversListContentChanges(driversList) {
+    if (!driversList) return;
     if (driversList.dataset.hasWatcher !== undefined) return;
-    new MutationObserver(queueUpdateDriversList).observe(driversList, {childList: true});
+
+    new MutationObserver(() => {
+        const signature = getLeaderboardSignature(driversList);
+        if (signature !== lastSeenLeaderboardSignature) {
+            lastSeenLeaderboardSignature = signature;
+            queueUpdateDriversList();
+        }
+    }).observe(driversList, {
+        childList: true,
+        subtree: true
+    });
+
     driversList.dataset.hasWatcher = 'true';
 }
 
@@ -277,9 +359,9 @@ async function getRacingSkillForDrivers(driverIds, onDriverFetched) {
         }
 
     racingSkillFetchInFlight.delete(+driverId);
+
     
-    racersCount++;
-    if (racersCount > 20) await sleep(1500);
+    await sleep(1300);
 }
 
     const resultHash = {};
@@ -523,11 +605,14 @@ function parseRacingData(data) {
     checkPenalty();
 
     // race link
-    if ($('#raceLink').size() < 1) {
-        RACE_ID = data.raceID;
-        const raceLink = `<a id="raceLink" href="https://www.torn.com/page.php?sid=racing&tab=log&raceID=${RACE_ID}" style="float: right; margin-left: 12px;">Link to the race</a>`;
-        $(raceLink).insertAfter('#racingEnhSettings');
-    }
+    RACE_ID = data.raceID;
+
+if ($('#raceLink').size() < 1) {
+    const raceLink = `<a id="raceLink" href="https://www.torn.com/page.php?sid=racing&tab=log&raceID=${RACE_ID}" style="float: right; margin-left: 12px;">Link to the race</a>`;
+    $(raceLink).insertAfter('#racingEnhSettings');
+} else {
+    $('#raceLink').attr('href', `https://www.torn.com/page.php?sid=racing&tab=log&raceID=${RACE_ID}`);
+}
 
     // results when race finished
     if (data.timeData.status >= 3) {
@@ -570,6 +655,7 @@ function parseRacingData(data) {
         if (SHOW_RESULTS) {
             showResults(results);
             showResults(crashes, results.length);
+            queueUpdateDriversList();
         }
     }
 }
@@ -676,7 +762,8 @@ function addSettingsDiv() {
             event.preventDefault();
             event.stopPropagation();
             GM_setValue('apiKey', $('#apiKey').val());
-            updateDriversList();
+            FETCH_RS = !!(GM_getValue('apiKey') && GM_getValue('apiKey').length > 0);
+            queueUpdateDriversList();
         });
     }
 }
@@ -857,6 +944,11 @@ function showCsvModal(csvText, fileName) {
 ajax((page, xhr) => {
     if (page != "loader" && page != "page") return;
 
+    if ($(location).attr('href').includes('sid=racing')) {
+        ensureRacingPageObserver();
+        ensureLeaderboardWatcher();
+    }
+    
     $("#racingupdatesnew").ready(addSettingsDiv);
     $("#racingupdatesnew").ready(showSpeed);
     $('#racingAdditionalContainer').ready(showPenalty);
@@ -891,6 +983,12 @@ ajax((page, xhr) => {
     }
 });
 
+setInterval(() => {
+    if (!location.href.includes('sid=racing')) return;
+    ensureRacingPageObserver();
+    ensureLeaderboardWatcher();
+}, 2000);
+
 checkPenalty();
 
 // Set up things that depend on jQuery being around in PDA
@@ -917,8 +1015,21 @@ function jqueryDependantInitializations() {
 
         if ((FETCH_RS || SHOW_SKINS) && $(location).attr('href').includes('sid=racing')) {
             $("#racingupdatesnew").ready(function() {
-                updateDriversList();
-                new MutationObserver(queueUpdateDriversList).observe(document.getElementById('racingAdditionalContainer'), {childList: true});
+                ensureRacingPageObserver();
+                ensureLeaderboardWatcher();
+        
+                const racingAdditionalContainer = document.getElementById('racingAdditionalContainer');
+                if (racingAdditionalContainer && racingAdditionalContainer.dataset.rsWatcher === undefined) {
+                    new MutationObserver(() => {
+                        ensureLeaderboardWatcher();
+                    }).observe(racingAdditionalContainer, {
+                        childList: true,
+                        subtree: true
+                    });
+                    racingAdditionalContainer.dataset.rsWatcher = 'true';
+                }
+        
+                queueUpdateDriversList();
             });
         }
 
