@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.2.5
+// @version      2.0.2.6
 
 // ==/UserScript==
 
