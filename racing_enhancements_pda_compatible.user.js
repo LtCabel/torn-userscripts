@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      2.0.2
+// @version      2.0.3
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -40,6 +40,10 @@ let   last_compl = -1.0;
 let   x = 0;
 let   penaltyNotif = 0;
 let   lastRenderedRaceKey = null;
+let   racingPageObserver = null;
+let   observedLeaderboard = null;
+let   lastSeenLeaderboardSignature = '';
+let   lastSeenPageHref = location.href;
 
 const RS_CACHE_KEY = 'racingSkillCachePersisted';
 const RS_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -53,6 +57,7 @@ function maybeClear() {
     }
 }
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
 
 // -------------------- Racing Skill cache --------------------
 const racingSkillFetchInFlight = new Set();
@@ -97,9 +102,72 @@ function queueUpdateDriversList() {
     });
 }
 
+function getLeaderboardSignature(driversList) {
+    if (!driversList) return '';
+    return Array.from(driversList.querySelectorAll('.driver-item'))
+        .map(driver => getDriverId(driver))
+        .join(',');
+}
+
+function resetRaceUiState() {
+    lastRenderedRaceKey = null;
+    observedLeaderboard = null;
+    lastSeenLeaderboardSignature = '';
+    _skinned = false;
+    updating = false;
+
+    const updatingNode = document.getElementById('updating');
+    if (updatingNode) updatingNode.remove();
+
+    const raceLink = document.getElementById('raceLink');
+    if (raceLink) raceLink.remove();
+}
+
+function ensureLeaderboardWatcher() {
+    const driversList = document.getElementById('leaderBoard');
+    if (!driversList) return;
+
+    if (observedLeaderboard !== driversList) {
+        observedLeaderboard = driversList;
+        watchForDriversListContentChanges(driversList);
+        lastSeenLeaderboardSignature = '';
+    }
+
+    const signature = getLeaderboardSignature(driversList);
+    if (signature && signature !== lastSeenLeaderboardSignature) {
+        lastSeenLeaderboardSignature = signature;
+        queueUpdateDriversList();
+    }
+}
+
+function ensureRacingPageObserver() {
+    if (racingPageObserver) return;
+
+    racingPageObserver = new MutationObserver(() => {
+        if (!location.href.includes('sid=racing')) return;
+
+        if (location.href !== lastSeenPageHref) {
+            lastSeenPageHref = location.href;
+            resetRaceUiState();
+        }
+
+        ensureLeaderboardWatcher();
+    });
+
+    racingPageObserver.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+}
+
+
 async function updateDriversList() {
     const driversList = document.getElementById('leaderBoard');
-    if (driversList === null) return;
+    if (driversList === null) {
+        observedLeaderboard = null;
+        lastSeenLeaderboardSignature = '';
+        return;
+    }
     if (updating) return;
 
     FETCH_RS = !!(GM_getValue('apiKey') && GM_getValue('apiKey').length > 0);
@@ -230,8 +298,20 @@ $('#updating').size() > 0 && $('#updating').remove();
 }
 
 function watchForDriversListContentChanges(driversList) {
+    if (!driversList) return;
     if (driversList.dataset.hasWatcher !== undefined) return;
-    new MutationObserver(queueUpdateDriversList).observe(driversList, {childList: true});
+
+    new MutationObserver(() => {
+        const signature = getLeaderboardSignature(driversList);
+        if (signature !== lastSeenLeaderboardSignature) {
+            lastSeenLeaderboardSignature = signature;
+            queueUpdateDriversList();
+        }
+    }).observe(driversList, {
+        childList: true,
+        subtree: true
+    });
+
     driversList.dataset.hasWatcher = 'true';
 }
 
@@ -493,7 +573,10 @@ function updateSkill(level) {
         }
 
         const lastInc = GM_getValue('lastRSincrement');
-        if (lastInc) $('div.skill').append(`<div style="margin-top: 10px;">Last gain: ${lastInc}</div>`);
+        if (lastInc) {
+            $('div.skill').find('.last-gain').remove();
+            $('div.skill').append(`<div class="last-gain" style="margin-top: 10px;">Last gain: ${lastInc}</div>`);
+        }
     }
 }
 
@@ -526,10 +609,13 @@ function parseRacingData(data) {
     checkPenalty();
 
     // race link
+    RACE_ID = data.raceID;
+
     if ($('#raceLink').size() < 1) {
-        RACE_ID = data.raceID;
         const raceLink = `<a id="raceLink" href="https://www.torn.com/page.php?sid=racing&tab=log&raceID=${RACE_ID}" style="float: right; margin-left: 12px;">Link to the race</a>`;
         $(raceLink).insertAfter('#racingEnhSettings');
+    } else {
+        $('#raceLink').attr('href', `https://www.torn.com/page.php?sid=racing&tab=log&raceID=${RACE_ID}`);
     }
 
     // results when race finished
@@ -573,6 +659,7 @@ function parseRacingData(data) {
         if (SHOW_RESULTS) {
             showResults(results);
             showResults(crashes, results.length);
+            queueUpdateDriversList();
         }
     }
 }
@@ -679,7 +766,8 @@ function addSettingsDiv() {
             event.preventDefault();
             event.stopPropagation();
             GM_setValue('apiKey', $('#apiKey').val());
-            updateDriversList();
+            FETCH_RS = !!(GM_getValue('apiKey') && GM_getValue('apiKey').length > 0);
+            queueUpdateDriversList();
         });
     }
 }
@@ -860,6 +948,11 @@ function showCsvModal(csvText, fileName) {
 ajax((page, xhr) => {
     if (page != "loader" && page != "page") return;
 
+    if ($(location).attr('href').includes('sid=racing')) {
+        ensureRacingPageObserver();
+        ensureLeaderboardWatcher();
+    }
+    
     $("#racingupdatesnew").ready(addSettingsDiv);
     $("#racingupdatesnew").ready(showSpeed);
     $('#racingAdditionalContainer').ready(showPenalty);
@@ -870,6 +963,7 @@ ajax((page, xhr) => {
 
     try {
         const parsed = JSON.parse(xhr.responseText);
+       
         requestAnimationFrame(() => {
             try {
                 parseRacingData(parsed);
@@ -893,6 +987,12 @@ ajax((page, xhr) => {
         });
     }
 });
+
+setInterval(() => {
+    if (!location.href.includes('sid=racing')) return;
+    ensureRacingPageObserver();
+    ensureLeaderboardWatcher();
+}, 2000);
 
 checkPenalty();
 
@@ -920,8 +1020,21 @@ function jqueryDependantInitializations() {
 
         if ((FETCH_RS || SHOW_SKINS) && $(location).attr('href').includes('sid=racing')) {
             $("#racingupdatesnew").ready(function() {
-                updateDriversList();
-                new MutationObserver(queueUpdateDriversList).observe(document.getElementById('racingAdditionalContainer'), {childList: true});
+                ensureRacingPageObserver();
+                ensureLeaderboardWatcher();
+        
+                const racingAdditionalContainer = document.getElementById('racingAdditionalContainer');
+                if (racingAdditionalContainer && racingAdditionalContainer.dataset.rsWatcher === undefined) {
+                    new MutationObserver(() => {
+                        ensureLeaderboardWatcher();
+                    }).observe(racingAdditionalContainer, {
+                        childList: true,
+                        subtree: true
+                    });
+                    racingAdditionalContainer.dataset.rsWatcher = 'true';
+                }
+        
+                queueUpdateDriversList();
             });
         }
 
