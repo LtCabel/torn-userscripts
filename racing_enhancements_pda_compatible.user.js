@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      2.0.3
+// @version      2.0.4
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -302,14 +302,12 @@ function watchForDriversListContentChanges(driversList) {
     if (driversList.dataset.hasWatcher !== undefined) return;
 
     new MutationObserver(() => {
-        const signature = getLeaderboardSignature(driversList);
-        if (signature !== lastSeenLeaderboardSignature) {
-            lastSeenLeaderboardSignature = signature;
-            queueUpdateDriversList();
-        }
+        queueUpdateDriversList();
     }).observe(driversList, {
         childList: true,
-        subtree: true
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['src', 'srcset', 'class']
     });
 
     driversList.dataset.hasWatcher = 'true';
@@ -992,7 +990,11 @@ setInterval(() => {
     if (!location.href.includes('sid=racing')) return;
     ensureRacingPageObserver();
     ensureLeaderboardWatcher();
-}, 2000);
+
+    if (document.getElementById('leaderBoard')) {
+        queueUpdateDriversList();
+    }
+}, 3000);
 
 checkPenalty();
 
