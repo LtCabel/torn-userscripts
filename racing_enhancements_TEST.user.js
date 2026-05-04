@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.4.8
+// @version      2.0.4.9
 
 // ==/UserScript==
 
@@ -1057,7 +1057,6 @@ function jqueryDependantInitializations() {
         // Styles
      GM_addStyle(`
   /* Name cell: clip long text and reserve space for RS */
-  ul.driver-item > li.name{
     ul.driver-item > li.name{
       position: relative !important;
       overflow: hidden !important;
