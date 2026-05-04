@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.3.2
+// @version      2.0.3.3
 
 // ==/UserScript==
 
@@ -714,14 +714,13 @@ function showResults(results, start = 0) {
       scrollSpan = document.createElement('span');
       scrollSpan.className = 'name-scroll';
     
-      // Move all non-RS children into name-scroll instead of wiping the node
-      const children = Array.from(nameLi.childNodes).filter(node => {
-        return !(node.nodeType === 1 && node.classList.contains('rs-display'));
-      });
-    
-      for (const child of children) {
-        scrollSpan.appendChild(child);
+      // ❗ Remove all existing Torn content (except RS badge)
+    const children = Array.from(nameLi.childNodes);
+    for (const child of children) {
+      if (!(child.nodeType === 1 && child.classList.contains('rs-display'))) {
+        child.remove();
       }
+    }
     
       nameLi.insertBefore(scrollSpan, rsBadge || null);
     }
@@ -1042,7 +1041,7 @@ function jqueryDependantInitializations() {
 
         // Styles
      GM_addStyle(`
-  /* Name cell: clip long text and reserve space for RS */
+/* Name cell: clip long text and reserve space for RS */
     ul.driver-item > li.name{
       position: relative !important;
       overflow: hidden !important;
@@ -1050,19 +1049,16 @@ function jqueryDependantInitializations() {
       box-sizing: border-box !important;
     }
     
-    /* Only this child scrolls horizontally */
+/* Only this child scrolls horizontally */
     ul.driver-item > li.name .name-scroll{
-      display: inline-block !important;
-      max-width: calc(100% - 55px) !important;
+      display: block !important;
+      max-width: 100% !important;
       white-space: nowrap !important;
       overflow-x: auto !important;
       overflow-y: hidden !important;
       -webkit-overflow-scrolling: touch !important;
       scrollbar-width: none !important;
       touch-action: pan-x !important;
-      vertical-align: middle !important;
-      border: 0 !important;
-      box-shadow: none !important;
     }
     
     ul.driver-item > li.name .name-scroll::-webkit-scrollbar{
