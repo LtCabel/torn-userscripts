@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.3.5
+// @version      2.0.4.0
 
 // ==/UserScript==
 
@@ -58,6 +58,11 @@ function maybeClear() {
 }
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
+function updateRsEnabledClass() {
+    const rsEnabled = !!(GM_getValue('apiKey') && GM_getValue('apiKey').length > 0);
+    document.documentElement.classList.toggle('racing-rs-enabled', rsEnabled);
+}
+
 
 // -------------------- Racing Skill cache --------------------
 const racingSkillFetchInFlight = new Set();
@@ -91,6 +96,7 @@ function persistRacingSkill(driverId, skill) {
 // Load cache immediately after defining helpers
 loadPersistedRacingSkillCache();
 
+updateRsEnabledClass();
 
 function queueUpdateDriversList() {
     if (updateDriversListQueued) return;
@@ -714,13 +720,14 @@ function showResults(results, start = 0) {
       scrollSpan = document.createElement('span');
       scrollSpan.className = 'name-scroll';
     
-      // ❗ Remove all existing Torn content (except RS badge)
-    const children = Array.from(nameLi.childNodes);
-    for (const child of children) {
-      if (!(child.nodeType === 1 && child.classList.contains('rs-display'))) {
-        child.remove();
+      // Move all non-RS children into name-scroll instead of wiping the node
+      const children = Array.from(nameLi.childNodes).filter(node => {
+        return !(node.nodeType === 1 && node.classList.contains('rs-display'));
+      });
+    
+      for (const child of children) {
+        scrollSpan.appendChild(child);
       }
-    }
     
       nameLi.insertBefore(scrollSpan, rsBadge || null);
     }
@@ -763,7 +770,15 @@ function addSettingsDiv() {
             event.preventDefault();
             event.stopPropagation();
             GM_setValue('apiKey', $('#apiKey').val());
+        
             FETCH_RS = !!(GM_getValue('apiKey') && GM_getValue('apiKey').length > 0);
+            updateRsEnabledClass();
+        
+            // Immediately remove RS if disabled
+            if (!FETCH_RS) {
+                document.querySelectorAll('.rs-display').forEach(el => el.remove());
+            }
+        
             queueUpdateDriversList();
         });
     }
@@ -1041,32 +1056,29 @@ function jqueryDependantInitializations() {
 
         // Styles
      GM_addStyle(`
-/* Name cell: clip long text and reserve space for RS */
-    ul.driver-item > li.name{
+  /* Name cell: clip long text and reserve space for RS */
+  ul.driver-item > li.name{
       position: relative !important;
       overflow: hidden !important;
-      padding-right: 55px !important;
+      padding-right: 0 !important;
       box-sizing: border-box !important;
     }
     
-/* Only this child scrolls horizontally */
-    ul.driver-item > li.name .name-scroll{
-      display: inline-block !important;
-      width: calc(100% - 55px) !important;
-      max-width: calc(100% - 55px) !important;
-      white-space: nowrap !important;
-      overflow-x: auto !important;
-      overflow-y: hidden !important;
-      -webkit-overflow-scrolling: touch !important;
-      scrollbar-width: none !important;
-      touch-action: pan-x !important;
-      vertical-align: middle !important;
-}
+    html.racing-rs-enabled ul.driver-item > li.name{
+      padding-right: 55px !important;
     }
-    
-    ul.driver-item > li.name .name-scroll::-webkit-scrollbar{
-      display: none;
-    }
+
+  /* Only this child scrolls horizontally */
+  ul.driver-item > li.name .name-scroll{
+    display: block !important;
+    max-width: 100% !important;
+    white-space: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    touch-action: pan-x !important;
+  }
+  ul.driver-item > li.name .name-scroll::-webkit-scrollbar{ display:none; }
 
   /* RS badge fixed on the right, never scrolls */
   ul.driver-item > li.name .rs-display{
