@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.2.8
+// @version      2.0.2.9
 
 // ==/UserScript==
 
@@ -1082,13 +1082,19 @@ function jqueryDependantInitializations() {
   li.name .race_position.bronze{ background-position:0 -44px; }
 
   /* 🔥 FIX: remove unwanted bottom "bar" under name/RS */
-  ul.driver-item > li.name,
-  ul.driver-item > li.name .name-scroll,
-  ul.driver-item > li.name .rs-display {
-    border-bottom: none !important;
-    box-shadow: none !important;
-    background-image: none !important;
-  }
+    ul.driver-item > li.name,
+    ul.driver-item > li.name .name-scroll,
+    ul.driver-item > li.name .rs-display {
+      border-bottom: none !important;
+      box-shadow: none !important;
+      background-image: none !important;
+    }
+    
+    ul.driver-item > li.name {
+      border-bottom: 1px solid #202020 !important;
+      box-shadow: inset 0 -1px 0 rgba(255,255,255,0.06) !important;
+      background-image: none !important;
+    }
 `);
 
         GM_addStyle(`
