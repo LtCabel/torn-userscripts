@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.4.6
+// @version      2.0.4.7
 
 // ==/UserScript==
 
@@ -1058,16 +1058,18 @@ function jqueryDependantInitializations() {
      GM_addStyle(`
   /* Name cell: clip long text and reserve space for RS */
   ul.driver-item > li.name{
-    box-shadow:
-        inset 0 -1px 0 rgba(0,0,0,0.65),
-        inset 0 -2px 0 rgba(255,255,255,0.05) !important;
     position: relative !important;
     overflow: hidden !important;
     padding-right: 0 !important;
     box-sizing: border-box !important;
+    box-shadow:
+        inset -1px 0 0 rgba(0,0,0,0.7),      /* vertical divider */
+        inset -2px 0 0 rgba(255,255,255,0.05), /* vertical highlight */
+        inset 0 -1px 0 rgba(0,0,0,0.65),     /* horizontal divider */
+        inset 0 -2px 0 rgba(255,255,255,0.05) /* horizontal highlight */
+        !important;
     }
     
-    ul.driver-item > li.name,
     ul.driver-item > li.name .name-scroll,
     ul.driver-item > li.name .rs-display {
         border-bottom: none !important;
