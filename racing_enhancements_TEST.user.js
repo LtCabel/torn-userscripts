@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.3.0
+// @version      2.0.3.1
 
 // ==/UserScript==
 
@@ -1043,24 +1043,32 @@ function jqueryDependantInitializations() {
         // Styles
      GM_addStyle(`
   /* Name cell: clip long text and reserve space for RS */
-  ul.driver-item > li.name{
-    position: relative !important;
-    overflow: hidden !important;
-    padding-right: 55px !important;   /* room for RS */
-    box-sizing: border-box !important;
-  }
-
-  /* Only this child scrolls horizontally */
-  ul.driver-item > li.name .name-scroll{
-    display: inline-block !important;
-    max-width: 100% !important;
-    white-space: nowrap !important;
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    scrollbar-width: none !important;
-    touch-action: pan-x !important;
-  }
-  ul.driver-item > li.name .name-scroll::-webkit-scrollbar{ display:none; }
+    ul.driver-item > li.name{
+      position: relative !important;
+      overflow: hidden !important;
+      padding-right: 55px !important;
+      box-sizing: border-box !important;
+      display: flex !important;
+      align-items: center !important;
+    }
+    
+    /* Only this child scrolls horizontally */
+    ul.driver-item > li.name .name-scroll{
+      display: block !important;
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
+      max-width: 100% !important;
+      white-space: nowrap !important;
+      overflow-x: auto !important;
+      overflow-y: hidden !important;
+      -webkit-overflow-scrolling: touch !important;
+      scrollbar-width: none !important;
+      touch-action: pan-x !important;
+    }
+    
+    ul.driver-item > li.name .name-scroll::-webkit-scrollbar{
+      display: none;
+    }
 
   /* RS badge fixed on the right, never scrolls */
   ul.driver-item > li.name .rs-display{
@@ -1080,19 +1088,6 @@ function jqueryDependantInitializations() {
   li.name .race_position.gold{   background-position:0 0; }
   li.name .race_position.silver{ background-position:0 -22px; }
   li.name .race_position.bronze{ background-position:0 -44px; }
-
-  /* 🔥 FIX: remove unwanted bottom "bar" under name/RS */
-    ul.driver-item > li.name,
-    ul.driver-item > li.name .name-scroll,
-    ul.driver-item > li.name .rs-display {
-      border-bottom: none !important;
-      box-shadow: none !important;
-    }
-    
-    ul.driver-item > li.name {
-      border-bottom: none !important;
-      box-shadow: none !important;
-    }
 `);
 
         GM_addStyle(`
