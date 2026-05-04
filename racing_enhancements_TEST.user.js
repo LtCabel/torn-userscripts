@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.5.0
+// @version      2.0.5.1
 
 // ==/UserScript==
 
@@ -1058,21 +1058,22 @@ function jqueryDependantInitializations() {
      GM_addStyle(`
   /* Name cell: clip long text and reserve space for RS */
     ul.driver-item > li.name{
-      position: relative !important;
-      overflow: hidden !important;
-      padding-right: 0 !important;
-      box-sizing: border-box !important;
-    }
+        position: relative !important;
+        overflow: hidden !important;
+        padding-right: 0 !important;
+        box-sizing: border-box !important;
+        border-bottom: none !important;
+      }
     
-    ul.driver-item > li.name .name-scroll,
-    ul.driver-item > li.name .rs-display {
-      border-bottom: none !important;
-      box-shadow: none !important;
-    }
+      ul.driver-item > li.name .name-scroll,
+      ul.driver-item > li.name .rs-display {
+        border-bottom: none !important;
+        box-shadow: none !important;
+      }
     
-    html.racing-rs-enabled ul.driver-item > li.name{
-      padding-right: 55px !important;
-    }
+      html.racing-rs-enabled ul.driver-item > li.name{
+        padding-right: 55px !important;
+      }
 
   /* Only this child scrolls horizontally */
   ul.driver-item > li.name .name-scroll{
