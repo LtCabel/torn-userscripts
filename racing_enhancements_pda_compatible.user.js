@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      2.0.4
+// @version      2.0.5
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -58,6 +58,11 @@ function maybeClear() {
 }
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
+function updateRsEnabledClass() {
+    const rsEnabled = !!(GM_getValue('apiKey') && GM_getValue('apiKey').length > 0);
+    document.documentElement.classList.toggle('racing-rs-enabled', rsEnabled);
+}
+
 
 // -------------------- Racing Skill cache --------------------
 const racingSkillFetchInFlight = new Set();
@@ -91,6 +96,7 @@ function persistRacingSkill(driverId, skill) {
 // Load cache immediately after defining helpers
 loadPersistedRacingSkillCache();
 
+updateRsEnabledClass();
 
 function queueUpdateDriversList() {
     if (updateDriversListQueued) return;
@@ -764,7 +770,15 @@ function addSettingsDiv() {
             event.preventDefault();
             event.stopPropagation();
             GM_setValue('apiKey', $('#apiKey').val());
+        
             FETCH_RS = !!(GM_getValue('apiKey') && GM_getValue('apiKey').length > 0);
+            updateRsEnabledClass();
+        
+            // Immediately remove RS if disabled
+            if (!FETCH_RS) {
+                document.querySelectorAll('.rs-display').forEach(el => el.remove());
+            }
+        
             queueUpdateDriversList();
         });
     }
@@ -1043,12 +1057,23 @@ function jqueryDependantInitializations() {
         // Styles
      GM_addStyle(`
   /* Name cell: clip long text and reserve space for RS */
-  ul.driver-item > li.name{
-    position: relative !important;
-    overflow: hidden !important;
-    padding-right: 55px !important;   /* room for RS */
-    box-sizing: border-box !important;
-  }
+    ul.driver-item > li.name{
+        position: relative !important;
+        overflow: hidden !important;
+        padding-right: 0 !important;
+        box-sizing: border-box !important;
+        border-bottom: none !important;
+      }
+    
+      ul.driver-item > li.name .name-scroll,
+      ul.driver-item > li.name .rs-display {
+        border-bottom: none !important;
+        box-shadow: none !important;
+      }
+    
+      html.racing-rs-enabled ul.driver-item > li.name{
+        padding-right: 55px !important;
+      }
 
   /* Only this child scrolls horizontally */
   ul.driver-item > li.name .name-scroll{
