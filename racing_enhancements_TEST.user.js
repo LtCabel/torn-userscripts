@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.2.9
+// @version      2.0.3.0
 
 // ==/UserScript==
 
@@ -1087,13 +1087,11 @@ function jqueryDependantInitializations() {
     ul.driver-item > li.name .rs-display {
       border-bottom: none !important;
       box-shadow: none !important;
-      background-image: none !important;
     }
     
     ul.driver-item > li.name {
-      border-bottom: 1px solid #202020 !important;
-      box-shadow: inset 0 -1px 0 rgba(255,255,255,0.06) !important;
-      background-image: none !important;
+      border-bottom: none !important;
+      box-shadow: none !important;
     }
 `);
 
