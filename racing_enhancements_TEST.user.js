@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.4.2
+// @version      2.0.4.3
 
 // ==/UserScript==
 
@@ -1069,7 +1069,6 @@ function jqueryDependantInitializations() {
     ul.driver-item > li.name .rs-display {
         border-bottom: none !important;
         box-shadow: none !important;
-        background-image: none !important;
     }
     
     html.racing-rs-enabled ul.driver-item > li.name{
