@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.3.4
+// @version      2.0.3.5
 
 // ==/UserScript==
 
@@ -1051,14 +1051,17 @@ function jqueryDependantInitializations() {
     
 /* Only this child scrolls horizontally */
     ul.driver-item > li.name .name-scroll{
-      display: inline !important;
-      max-width: 100% !important;
+      display: inline-block !important;
+      width: calc(100% - 55px) !important;
+      max-width: calc(100% - 55px) !important;
       white-space: nowrap !important;
       overflow-x: auto !important;
       overflow-y: hidden !important;
       -webkit-overflow-scrolling: touch !important;
       scrollbar-width: none !important;
       touch-action: pan-x !important;
+      vertical-align: middle !important;
+}
     }
     
     ul.driver-item > li.name .name-scroll::-webkit-scrollbar{
