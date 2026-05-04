@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.3.3
+// @version      2.0.3.4
 
 // ==/UserScript==
 
@@ -1051,7 +1051,7 @@ function jqueryDependantInitializations() {
     
 /* Only this child scrolls horizontally */
     ul.driver-item > li.name .name-scroll{
-      display: block !important;
+      display: inline !important;
       max-width: 100% !important;
       white-space: nowrap !important;
       overflow-x: auto !important;
