@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.4.4
+// @version      2.0.4.5
 
 // ==/UserScript==
 
@@ -1058,7 +1058,7 @@ function jqueryDependantInitializations() {
      GM_addStyle(`
   /* Name cell: clip long text and reserve space for RS */
   ul.driver-item > li.name{
-    box-shadow: inset 0 -1px 0 rgba(0,0,0,0.55) !important;
+    box-shadow: inset 0 -1px 0 rgba(0,0,0,0.65) !important;
     position: relative !important;
     overflow: hidden !important;
     padding-right: 0 !important;
