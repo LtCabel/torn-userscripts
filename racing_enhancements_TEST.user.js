@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.4.1
+// @version      2.0.4.2
 
 // ==/UserScript==
 
@@ -1058,24 +1058,18 @@ function jqueryDependantInitializations() {
      GM_addStyle(`
   /* Name cell: clip long text and reserve space for RS */
   ul.driver-item > li.name{
-      position: relative !important;
-      overflow: hidden !important;
-      padding-right: 0 !important;
-      box-sizing: border-box !important;
-    
-      /* 🔥 Remove inner seam */
-      box-shadow: none !important;
+    position: relative !important;
+    overflow: hidden !important;
+    padding-right: 0 !important;
+    box-sizing: border-box !important;
     }
     
-    /* 🔥 Remove the inner line from scroll container */
-    ul.driver-item > li.name .name-scroll{
-      box-shadow: none !important;
-      border-bottom: none !important;
-    }
-    
-    /* 🔥 Recreate a clean, consistent row divider */
-    ul.driver-item{
-      border-bottom: 1px solid #2a2a2a !important;
+    ul.driver-item > li.name,
+    ul.driver-item > li.name .name-scroll,
+    ul.driver-item > li.name .rs-display {
+        border-bottom: none !important;
+        box-shadow: none !important;
+        background-image: none !important;
     }
     
     html.racing-rs-enabled ul.driver-item > li.name{
