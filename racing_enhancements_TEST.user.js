@@ -15,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0.2.6
+// @version      2.0.2.7
 
 // ==/UserScript==
 
@@ -302,14 +302,12 @@ function watchForDriversListContentChanges(driversList) {
     if (driversList.dataset.hasWatcher !== undefined) return;
 
     new MutationObserver(() => {
-        const signature = getLeaderboardSignature(driversList);
-        if (signature !== lastSeenLeaderboardSignature) {
-            lastSeenLeaderboardSignature = signature;
-            queueUpdateDriversList();
-        }
+        queueUpdateDriversList();
     }).observe(driversList, {
         childList: true,
-        subtree: true
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['src', 'srcset', 'class']
     });
 
     driversList.dataset.hasWatcher = 'true';
@@ -992,7 +990,11 @@ setInterval(() => {
     if (!location.href.includes('sid=racing')) return;
     ensureRacingPageObserver();
     ensureLeaderboardWatcher();
-}, 2000);
+
+    if (document.getElementById('leaderBoard')) {
+        queueUpdateDriversList();
+    }
+}, 3000);
 
 checkPenalty();
 
@@ -1050,7 +1052,7 @@ function jqueryDependantInitializations() {
 
   /* Only this child scrolls horizontally */
   ul.driver-item > li.name .name-scroll{
-    display: block !important;
+    display: inline-block !important;
     max-width: 100% !important;
     white-space: nowrap !important;
     overflow-x: auto !important;
