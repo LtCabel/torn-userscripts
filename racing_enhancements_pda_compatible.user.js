@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn: Racing enhancements (Compatible with Torn PDA)
 // @namespace    ltcabel.racing_enhancements
-// @version      2.0.5
+// @version      2.0.6
 // @description  Show car's current speed, precise skill, official race penalty, racing skill of others and race car skins.
 // @author       Lugburz, modified by Reshula & LtCabel
 // @match        https://www.torn.com/loader.php?sid=racing*
@@ -615,11 +615,48 @@ function parseRacingData(data) {
     // race link
     RACE_ID = data.raceID;
 
+    const raceUrl = `https://www.torn.com/page.php?sid=racing&tab=log&raceID=${RACE_ID}`;
+
     if ($('#raceLink').size() < 1) {
-        const raceLink = `<a id="raceLink" href="https://www.torn.com/page.php?sid=racing&tab=log&raceID=${RACE_ID}" style="float: right; margin-left: 12px;">Link to the race</a>`;
-        $(raceLink).insertAfter('#racingEnhSettings');
+        const raceLink = $('<a id="raceLink" href="#" style="float: right; margin-left: 12px;">Copy link to the race</a>');
+    
+        raceLink.on('click', async function(e) {
+            e.preventDefault();
+    
+            try {
+                await navigator.clipboard.writeText(raceUrl);
+    
+                if (typeof GM_notification === 'function') {
+                    GM_notification("Race link copied to clipboard!", "Torn Racing");
+                } else {
+                    alert("Race link copied to clipboard!");
+                }
+            } catch (err) {
+                prompt("Copy this race link manually:", raceUrl);
+            }
+        });
+    
+        raceLink.insertAfter('#racingEnhSettings');
     } else {
-        $('#raceLink').attr('href', `https://www.torn.com/page.php?sid=racing&tab=log&raceID=${RACE_ID}`);
+        $('#raceLink')
+            .text('Copy link to the race')
+            .attr('href', '#')
+            .off('click')
+            .on('click', async function(e) {
+            e.preventDefault();
+    
+            try {
+                await navigator.clipboard.writeText(raceUrl);
+    
+                if (typeof GM_notification === 'function') {
+                    GM_notification("Race link copied to clipboard!", "Torn Racing");
+                } else {
+                    alert("Race link copied to clipboard!");
+                }
+            } catch (err) {
+                prompt("Copy this race link manually:", raceUrl);
+            }
+        });
     }
 
     // results when race finished
